@@ -163,7 +163,7 @@ class Client:
         if game not in supported_games:
             self.logger.warning(f'Client {self.addr} turned away, game not supported. '
                                 f'{game} not in {supported_games}')
-            self.send_packet(PACKET_TYPE_DENY, str(MIN_SUPPORTED_CLIENT_VERSION))
+            self.send_packet(PACKET_TYPE_DENY, PACKET_VAL_GAME)
             return False
 
         # Look for available seat

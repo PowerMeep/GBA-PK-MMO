@@ -500,7 +500,6 @@ local function ReceiveMultiplayerPackets(size)
 end
 
 --- Attempt to establish a connection with a server using the provided information.
---- TODO: if there is no server to connect to, mGBA chugs.
 local function connectToServer()
     if MasterClient ~= "c" then
         console:log("Attempting to connect to server...")
