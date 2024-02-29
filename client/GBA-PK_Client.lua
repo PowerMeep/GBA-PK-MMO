@@ -141,7 +141,7 @@ local LocalPlayerExtra1 = 0
 --- Sprite Number (Male / Female)
 local LocalPlayerGender = 0
 local LocalPlayerExtra3 = 0
-local LocalPlayerExtra4 = 0
+local LocalPlayerIsInBattle = 0
 
 
 local Keypressholding = 0
@@ -196,9 +196,8 @@ local function newPlayerProxy()
         Gender=0,
         --- ??? The direction this player is facing?
         PlayerExtra3=0,
-        --- ??? A boolean related to screen data?
         --- used to determine whether to draw the battle symbol
-        PlayerExtra4=0,
+        IsInBattle=0,
         --- Whether this player could be visible to us
         --- True if we either share map ids or previous map ids
         PlayerVis=0,
@@ -307,7 +306,7 @@ local function CreatePacket(RequestTemp, PacketTemp, Recipient)
     Packet = Packet .. LocalPlayerExtra1
     Packet = Packet .. LocalPlayerGender
     Packet = Packet .. LocalPlayerExtra3
-    Packet = Packet .. LocalPlayerExtra4
+    Packet = Packet .. LocalPlayerIsInBattle
     Packet = Packet .. LocalPlayerMapID
     Packet = Packet .. LocalPlayerMapIDPrev
     Packet = Packet .. LocalPlayerMapEntranceType
@@ -1890,9 +1889,9 @@ local function NoPlayersIfScreen()
         --	console:log("SCREENDATA ON")
     end
     if ScreenData4 == 1 then
-        LocalPlayerExtra4 = 1
+        LocalPlayerIsInBattle = 1
     else
-        LocalPlayerExtra4 = 0
+        LocalPlayerIsInBattle = 0
     end
 end
 
@@ -2710,7 +2709,7 @@ local function RenderPlayer(player, renderer)
     end
 
     -- Add an icon above the head if needed.
-    if player.PlayerExtra4 == 1 then
+    if player.IsInBattle == 1 then
         local SymbolY = FinalMapY - 8
         local SymbolX = FinalMapX
         local spritePointer = renderer.spritePointerAddress + 8
@@ -2797,7 +2796,7 @@ local function onRemotePlayerUpdate(player)
     end
 
     player.PlayerExtra3 = ReceiveDataSmall[12]
-    player.PlayerExtra4 = ReceiveDataSmall[13]
+    player.IsInBattle = ReceiveDataSmall[13]
     -- Where this player entered their map
     player.StartX = ReceiveDataSmall[18]
     player.StartY = ReceiveDataSmall[19]
