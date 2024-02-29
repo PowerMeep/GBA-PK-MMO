@@ -136,11 +136,14 @@ local LocalPlayerPreviousY = 0
 -- This is the coordinate that the player entered this map on
 local LocalPlayerStartX = 2000
 local LocalPlayerStartY = 2000
--- Misc data with unhelpful names
+-- TODO: figure out what this does and rename it
 local LocalPlayerExtra1 = 0
---- Sprite Number (Male / Female)
+--- Sprite Number (0 = Male, 1 = Female)
 local LocalPlayerGender = 0
-local LocalPlayerExtra3 = 0
+--- Player Movement Method (0 = Walking, 1 = Biking, 2 = Surfing)
+--- Used for some initial decoding and sent to other players, but doesn't seem to be used by other players.
+local LocalPlayerMovementMethod = 0
+--- Whether the player is in a battle (0 = No, 1 = Yes)
 local LocalPlayerIsInBattle = 0
 
 
@@ -194,9 +197,9 @@ local function newPlayerProxy()
         PlayerExtra1=0,
         --- Sprite Number (Male / Female)
         Gender=0,
-        --- ??? The direction this player is facing?
-        PlayerExtra3=0,
-        --- used to determine whether to draw the battle symbol
+        --- How this player is moving (Walking / Biking / Surfing)
+        MovementMethod=0,
+        --- Used to determine whether to draw the battle symbol
         IsInBattle=0,
         --- Whether this player could be visible to us
         --- True if we either share map ids or previous map ids
@@ -305,7 +308,7 @@ local function CreatePacket(RequestTemp, PacketTemp, Recipient)
     Packet = Packet .. LocalPlayerFacing2
     Packet = Packet .. LocalPlayerExtra1
     Packet = Packet .. LocalPlayerGender
-    Packet = Packet .. LocalPlayerExtra3
+    Packet = Packet .. LocalPlayerMovementMethod
     Packet = Packet .. LocalPlayerIsInBattle
     Packet = Packet .. LocalPlayerMapID
     Packet = Packet .. LocalPlayerMapIDPrev
@@ -1446,31 +1449,31 @@ local function GetPosition()
     --Male Firered Sprite from 1.0, 1.1, and leafgreen
     if ((Bike == 160 or Bike == 272) or (Bike == 128 or Bike == 240)) then
         LocalPlayerGender = 0
-        LocalPlayerExtra3 = 0
+        LocalPlayerMovementMethod = 0
         --	if TempVar2 == 0 then ConsoleForText:print("Male on Foot") end
         --Male Firered Biking Sprite
     elseif (Bike == 320 or Bike == 432 or Bike == 288 or Bike == 400) then
         LocalPlayerGender = 0
-        LocalPlayerExtra3 = 1
+        LocalPlayerMovementMethod = 1
         --	if TempVar2 == 0 then ConsoleForText:print("Male on Bike") end
         --Male Firered Surfing Sprite
     elseif (Bike == 624 or Bike == 736 or Bike == 592 or Bike == 704) then
         LocalPlayerGender = 0
-        LocalPlayerExtra3 = 2
+        LocalPlayerMovementMethod = 2
         --Female sprite
     elseif ((Bike == 392 or Bike == 504) or (Bike == 360 or Bike == 472)) then
         LocalPlayerGender = 1
-        LocalPlayerExtra3 = 0
+        LocalPlayerMovementMethod = 0
         --	if TempVar2 == 0 then ConsoleForText:print("Female on Foot") end
         --Female Biking sprite
     elseif ((Bike == 552 or Bike == 664) or (Bike == 520 or Bike == 632)) then
         LocalPlayerGender = 1
-        LocalPlayerExtra3 = 1
+        LocalPlayerMovementMethod = 1
         --	if TempVar2 == 0 then ConsoleForText:print("Female on Bike") end
         --Female Firered Surfing Sprite
     elseif (Bike == 720 or Bike == 832 or Bike == 688 or Bike == 800) then
         LocalPlayerGender = 1
-        LocalPlayerExtra3 = 2
+        LocalPlayerMovementMethod = 2
     else
         --If in bag when connecting will automatically be firered male
         --	if TempVar2 == 0 then ConsoleForText:print("Bag/Unknown") end
@@ -1480,7 +1483,7 @@ local function GetPosition()
     else
         LocalPlayerExtra1 = 0
     end
-    if LocalPlayerExtra3 == 2 then
+    if LocalPlayerMovementMethod == 2 then
         --Facing
         if LocalPlayerFacing == 0 then
             LocalPlayerExtra1 = 33
@@ -1607,7 +1610,7 @@ local function GetPosition()
                 LocalPlayerFacing = 3
             end
         end
-    elseif LocalPlayerExtra3 == 1 then
+    elseif LocalPlayerMovementMethod == 1 then
         if LocalPlayerFacing == 0 then
             LocalPlayerExtra1 = 17
             LocalPlayerCurrentDirection = 4
@@ -2795,7 +2798,7 @@ local function onRemotePlayerUpdate(player)
         player.Gender = ReceiveDataSmall[11]
     end
 
-    player.PlayerExtra3 = ReceiveDataSmall[12]
+    player.MovementMethod = ReceiveDataSmall[12]
     player.IsInBattle = ReceiveDataSmall[13]
     -- Where this player entered their map
     player.StartX = ReceiveDataSmall[18]
