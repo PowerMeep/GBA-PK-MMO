@@ -311,8 +311,8 @@ local function CreatePacket(RequestTemp, PacketTemp, Recipient)
     Packet = Packet .. LocalPlayerGender
     Packet = Packet .. LocalPlayerMovementMethod
     Packet = Packet .. LocalPlayerIsInBattle
-    Packet = Packet .. LocalPlayerMapID
-    Packet = Packet .. LocalPlayerMapIDPrev
+    Packet = Packet .. (LocalPlayerMapID + 100000)
+    Packet = Packet .. (LocalPlayerMapIDPrev + 100000)
     Packet = Packet .. LocalPlayerMapEntranceType
     Packet = Packet .. LocalPlayerStartX
     Packet = Packet .. LocalPlayerStartY
@@ -1431,7 +1431,6 @@ local function GetPosition()
     LocalPlayerFacing = emu:read8(PlayerFaceAddress)
     --Prev map
     LocalPlayerMapIDPrev = emu:read16(PrevMapIDAddress)
-    LocalPlayerMapIDPrev = LocalPlayerMapIDPrev + 100000
     if LocalPlayerMapIDPrev == LocalPlayerMapID then
         LocalPlayerPreviousX = LocalPlayerCurrentX
         LocalPlayerPreviousY = LocalPlayerCurrentY
@@ -1442,7 +1441,6 @@ local function GetPosition()
         LocalPlayerMapChange = 1
     end
     LocalPlayerMapID = emu:read16(MapAddress)
-    LocalPlayerMapID = LocalPlayerMapID + 100000
     LocalPlayerCurrentX = emu:read16(PlayerXAddress) + 2000
     LocalPlayerCurrentY = emu:read16(PlayerYAddress) + 2000
     --	console:log("X: " .. LocalPlayerCurrentX)
@@ -2763,7 +2761,7 @@ local function DrawChars()
 end
 
 local function onRemotePlayerUpdate(player)
-    if player.CurrentMapID ~= ReceiveDataSmall[14] then
+    if player.CurrentMapID ~= ReceiveDataSmall[14]  then
         player.PlayerAnimationFrame = 0
         player.PlayerAnimationFrame2 = 0
         player.PlayerAnimationFrameMax = 0
@@ -2978,9 +2976,9 @@ function onDataReceived()
         --Y
         ReceiveDataSmall[8] = string.sub(ReadData, 29, 32)
         ReceiveDataSmall[8] = tonumber(ReceiveDataSmall[8])
-        --Facing (used during comparing for extra1)
+        --Facing (not used)
         ReceiveDataSmall[9] = string.sub(ReadData, 33, 35)
-        ReceiveDataSmall[9] = tonumber(ReceiveDataSmall[9])
+        ReceiveDataSmall[9] = tonumber(ReceiveDataSmall[9]) - 100
         --Extra 1
         ReceiveDataSmall[10] = string.sub(ReadData, 36, 38)
         ReceiveDataSmall[10] = tonumber(ReceiveDataSmall[10])
@@ -2996,10 +2994,10 @@ function onDataReceived()
         ReceiveDataSmall[13] = tonumber(ReceiveDataSmall[13])
         --MapID
         ReceiveDataSmall[14] = string.sub(ReadData, 42, 47)
-        ReceiveDataSmall[14] = tonumber(ReceiveDataSmall[14])
+        ReceiveDataSmall[14] = tonumber(ReceiveDataSmall[14]) - 100000
         --PreviousMapID
         ReceiveDataSmall[15] = string.sub(ReadData, 48, 53)
-        ReceiveDataSmall[15] = tonumber(ReceiveDataSmall[15])
+        ReceiveDataSmall[15] = tonumber(ReceiveDataSmall[15]) - 100000
         --MapConnectionType
         ReceiveDataSmall[16] = string.sub(ReadData, 54, 54)
         ReceiveDataSmall[16] = tonumber(ReceiveDataSmall[16])
@@ -3232,7 +3230,7 @@ local function onKeysRead()
                 --SCRIPTS. LOCK AND PREVENT SPAM PRESS.
                 if LockFromScript == 0 and Keypressholding == 0 and TooBusyByte == 0 then
                     --HIDE N SEEK AT DESK IN ROOM
-                    if MasterClient == "h" and LocalPlayerCurrentDirection == 3 and LocalPlayerCurrentX == 1009 and LocalPlayerCurrentY == 1009 and LocalPlayerMapID == 100260 then
+                    if MasterClient == "h" and LocalPlayerCurrentDirection == 3 and LocalPlayerCurrentX == 1009 and LocalPlayerCurrentY == 1009 and LocalPlayerMapID == 260 then
                         --Server config through bedroom drawer
                         --For temp ram to load up script in 145227776 - 08A80000
                         --8004 is the temp var to get yes or no
