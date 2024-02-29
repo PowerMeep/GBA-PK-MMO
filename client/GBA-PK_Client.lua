@@ -307,7 +307,7 @@ local function CreatePacket(RequestTemp, PacketTemp, Recipient)
     Packet = Packet .. LocalPlayerCurrentX
     Packet = Packet .. LocalPlayerCurrentY
     Packet = Packet .. (LocalPlayerFacing + 100)
-    Packet = Packet .. LocalPlayerExtra1
+    Packet = Packet .. (LocalPlayerExtra1 + 100)
     Packet = Packet .. LocalPlayerGender
     Packet = Packet .. LocalPlayerMovementMethod
     Packet = Packet .. LocalPlayerIsInBattle
@@ -1478,11 +1478,7 @@ local function GetPosition()
         --If in bag when connecting will automatically be firered male
         --	if TempVar2 == 0 then ConsoleForText:print("Bag/Unknown") end
     end
-    if LocalPlayerExtra1 ~= 0 then
-        LocalPlayerExtra1 = LocalPlayerExtra1 - 100
-    else
-        LocalPlayerExtra1 = 0
-    end
+
     if LocalPlayerMovementMethod == 2 then
         --Facing
         if LocalPlayerFacing == 0 then
@@ -1853,7 +1849,6 @@ local function GetPosition()
         end
         --	if Facing == 255 then PlayerExtra1 = 0 end
     end
-    LocalPlayerExtra1 = LocalPlayerExtra1 + 100
 end
 
 local function NoPlayersIfScreen()
@@ -2990,13 +2985,13 @@ function onDataReceived()
         ReceiveDataSmall[10] = string.sub(ReadData, 36, 38)
         ReceiveDataSmall[10] = tonumber(ReceiveDataSmall[10])
         ReceiveDataSmall[10] = ReceiveDataSmall[10] - 100
-        --Extra 2
+        --Gender
         ReceiveDataSmall[11] = string.sub(ReadData, 39, 39)
         ReceiveDataSmall[11] = tonumber(ReceiveDataSmall[11])
-        --Extra 3
+        --Movement Method
         ReceiveDataSmall[12] = string.sub(ReadData, 40, 40)
         ReceiveDataSmall[12] = tonumber(ReceiveDataSmall[12])
-        --Extra 4
+        --Battling
         ReceiveDataSmall[13] = string.sub(ReadData, 41, 41)
         ReceiveDataSmall[13] = tonumber(ReceiveDataSmall[13])
         --MapID
