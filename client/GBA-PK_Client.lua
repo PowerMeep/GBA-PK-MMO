@@ -122,8 +122,6 @@ local LocalPlayerMapChange = 0
 local LocalPlayerCurrentDirection = 0
 --- This may actually represent the current animation set being used
 local LocalPlayerFacing = 0
---- The value of LocalPlayerFacing + 100, for packets
-local LocalPlayerFacing2 = 0
 -- ??? This may represent the offset of the current map to the previous.
 local LocalPlayerDifferentMapX = 0
 local LocalPlayerDifferentMapY = 0
@@ -297,6 +295,9 @@ local function CreatePacket(RequestTemp, PacketTemp, Recipient)
 
     -- I'd rather this be on one line, but doing it this way
     -- makes it a lot easier to troubleshoot when one of these values is nil
+    --
+    -- These values are padded to a specific length.
+    -- In the case of numerics, this is achieved by adding a larger number to them.
     local FillerStuff = "F"
     local Packet = ""
     Packet = Packet .. Nickname
@@ -305,7 +306,7 @@ local function CreatePacket(RequestTemp, PacketTemp, Recipient)
     Packet = Packet .. PacketTemp
     Packet = Packet .. LocalPlayerCurrentX
     Packet = Packet .. LocalPlayerCurrentY
-    Packet = Packet .. LocalPlayerFacing2
+    Packet = Packet .. (LocalPlayerFacing + 100)
     Packet = Packet .. LocalPlayerExtra1
     Packet = Packet .. LocalPlayerGender
     Packet = Packet .. LocalPlayerMovementMethod
@@ -1428,7 +1429,6 @@ local function GetPosition()
         end
     end
     LocalPlayerFacing = emu:read8(PlayerFaceAddress)
-    LocalPlayerFacing2 = LocalPlayerFacing + 100
     --Prev map
     LocalPlayerMapIDPrev = emu:read16(PrevMapIDAddress)
     LocalPlayerMapIDPrev = LocalPlayerMapIDPrev + 100000
