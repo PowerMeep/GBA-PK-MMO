@@ -132,8 +132,8 @@ local LocalPlayerCurrentY = 0
 local LocalPlayerPreviousX = 0
 local LocalPlayerPreviousY = 0
 -- This is the coordinate that the player entered this map on
-local LocalPlayerStartX = 2000
-local LocalPlayerStartY = 2000
+local LocalPlayerStartX = 0
+local LocalPlayerStartY = 0
 -- TODO: figure out what this does and rename it
 local LocalPlayerExtra1 = 0
 --- Sprite Number (0 = Male, 1 = Female)
@@ -304,8 +304,8 @@ local function CreatePacket(RequestTemp, PacketTemp, Recipient)
     Packet = Packet .. Recipient
     Packet = Packet .. RequestTemp
     Packet = Packet .. PacketTemp
-    Packet = Packet .. LocalPlayerCurrentX
-    Packet = Packet .. LocalPlayerCurrentY
+    Packet = Packet .. (LocalPlayerCurrentX + 2000)
+    Packet = Packet .. (LocalPlayerCurrentY + 2000)
     Packet = Packet .. (LocalPlayerFacing + 100)
     Packet = Packet .. (LocalPlayerExtra1 + 100)
     Packet = Packet .. LocalPlayerGender
@@ -314,8 +314,8 @@ local function CreatePacket(RequestTemp, PacketTemp, Recipient)
     Packet = Packet .. (LocalPlayerMapID + 100000)
     Packet = Packet .. (LocalPlayerMapIDPrev + 100000)
     Packet = Packet .. LocalPlayerMapEntranceType
-    Packet = Packet .. LocalPlayerStartX
-    Packet = Packet .. LocalPlayerStartY
+    Packet = Packet .. (LocalPlayerStartX + 2000)
+    Packet = Packet .. (LocalPlayerStartY + 2000)
     Packet = Packet .. FillerStuff .. "U"
     return Packet
 end
@@ -1441,8 +1441,8 @@ local function GetPosition()
         LocalPlayerMapChange = 1
     end
     LocalPlayerMapID = emu:read16(MapAddress)
-    LocalPlayerCurrentX = emu:read16(PlayerXAddress) + 2000
-    LocalPlayerCurrentY = emu:read16(PlayerYAddress) + 2000
+    LocalPlayerCurrentX = emu:read16(PlayerXAddress)
+    LocalPlayerCurrentY = emu:read16(PlayerYAddress)
     --	console:log("X: " .. LocalPlayerCurrentX)
     --Male Firered Sprite from 1.0, 1.1, and leafgreen
     if ((Bike == 160 or Bike == 272) or (Bike == 128 or Bike == 240)) then
@@ -2972,10 +2972,10 @@ function onDataReceived()
         ReceiveDataSmall[6] = tonumber(ReceiveDataSmall[6])
         --X
         ReceiveDataSmall[7] = string.sub(ReadData, 25, 28)
-        ReceiveDataSmall[7] = tonumber(ReceiveDataSmall[7])
+        ReceiveDataSmall[7] = tonumber(ReceiveDataSmall[7]) - 2000
         --Y
         ReceiveDataSmall[8] = string.sub(ReadData, 29, 32)
-        ReceiveDataSmall[8] = tonumber(ReceiveDataSmall[8])
+        ReceiveDataSmall[8] = tonumber(ReceiveDataSmall[8]) - 2000
         --Facing (not used)
         ReceiveDataSmall[9] = string.sub(ReadData, 33, 35)
         ReceiveDataSmall[9] = tonumber(ReceiveDataSmall[9]) - 100
@@ -3003,10 +3003,10 @@ function onDataReceived()
         ReceiveDataSmall[16] = tonumber(ReceiveDataSmall[16])
         --StartX
         ReceiveDataSmall[18] = string.sub(ReadData, 55, 58)
-        ReceiveDataSmall[18] = tonumber(ReceiveDataSmall[18])
+        ReceiveDataSmall[18] = tonumber(ReceiveDataSmall[18]) - 2000
         --StartY
         ReceiveDataSmall[19] = string.sub(ReadData, 59, 62)
-        ReceiveDataSmall[19] = tonumber(ReceiveDataSmall[19])
+        ReceiveDataSmall[19] = tonumber(ReceiveDataSmall[19]) - 2000
         --Between 53 and 63 there are 11 bytes of filler.
 
         --	if messageType == "DTRA" then ConsoleForText:print("Locktype: " .. LockFromScript) end
@@ -3230,7 +3230,7 @@ local function onKeysRead()
                 --SCRIPTS. LOCK AND PREVENT SPAM PRESS.
                 if LockFromScript == 0 and Keypressholding == 0 and TooBusyByte == 0 then
                     --HIDE N SEEK AT DESK IN ROOM
-                    if MasterClient == "h" and LocalPlayerCurrentDirection == 3 and LocalPlayerCurrentX == 1009 and LocalPlayerCurrentY == 1009 and LocalPlayerMapID == 260 then
+                    if MasterClient == "h" and LocalPlayerCurrentDirection == 3 and LocalPlayerCurrentX == -991 and LocalPlayerCurrentY == -991 and LocalPlayerMapID == 260 then
                         --Server config through bedroom drawer
                         --For temp ram to load up script in 145227776 - 08A80000
                         --8004 is the temp var to get yes or no
