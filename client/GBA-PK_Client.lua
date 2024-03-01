@@ -21,7 +21,7 @@ local FRLG = require(".FireRed_LeafGreen")
 
 -- CONSTANTS
 --- Version number for this client script. Used to track compatibility with the server.
-local ClientVersionNumber = 1015
+local ClientVersionNumber = 1016
 --- The console used for displaying current status.
 local ConsoleForText
 --- Flip the gender of remote players.
