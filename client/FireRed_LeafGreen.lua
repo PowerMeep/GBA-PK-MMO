@@ -8,7 +8,7 @@
 --19-21 = Running Idle Positions
 --22-27 = Running
 --28-33 = Surfing stuff
-local FRLG_SpriteData = {
+local Sprites = {
     -- Male Character
     [0] = {
         --Side Left
@@ -180,4 +180,129 @@ local FRLG_SpriteData = {
     }
 }
 
-return FRLG_SpriteData
+-- Gender, MovementMethod
+local BikeVal_MaleOnFoot    = {0, 0}
+local BikeVal_MaleOnBike    = {0, 1}
+local BikeVal_MaleSurfing   = {0, 2}
+local BikeVal_FemaleOnFoot  = {1, 0}
+local BikeVal_FemaleOnBike  = {1, 1}
+local BikeVal_FemaleSurfing = {1, 2}
+
+local BikeDecoder = {
+    [160] = BikeVal_MaleOnFoot,
+    [272] = BikeVal_MaleOnFoot,
+    [128] = BikeVal_MaleOnFoot,
+    [240] = BikeVal_MaleOnFoot,
+
+    [320] = BikeVal_MaleOnBike,
+    [432] = BikeVal_MaleOnBike,
+    [288] = BikeVal_MaleOnBike,
+    [400] = BikeVal_MaleOnBike,
+
+    [624] = BikeVal_MaleSurfing,
+    [736] = BikeVal_MaleSurfing,
+    [592] = BikeVal_MaleSurfing,
+    [704] = BikeVal_MaleSurfing,
+
+    [392] = BikeVal_FemaleOnFoot,
+    [504] = BikeVal_FemaleOnFoot,
+    [360] = BikeVal_FemaleOnFoot,
+    [472] = BikeVal_FemaleOnFoot,
+
+    [552] = BikeVal_FemaleOnBike,
+    [664] = BikeVal_FemaleOnBike,
+    [520] = BikeVal_FemaleOnBike,
+    [632] = BikeVal_FemaleOnBike,
+
+    [720] = BikeVal_FemaleSurfing,
+    [832] = BikeVal_FemaleSurfing,
+    [688] = BikeVal_FemaleSurfing,
+    [800] = BikeVal_FemaleSurfing
+}
+
+-- Extra1, Direction
+local MovementDecoder = {
+    [2] = {
+        [  0] = {33, 4},
+        [  1] = {34, 3},
+        [  2] = {35, 1},
+        [  3] = {36, 2},
+        [ 29] = {37, 4},
+        [ 30] = {38, 3},
+        [ 31] = {39, 1},
+        [ 32] = {40, 2},
+        [ 41] = {33, 4},
+        [ 42] = {34, 3},
+        [ 43] = {35, 1},
+        [ 44] = {36, 2},
+        [ 33] = {33, 4},
+        [ 34] = {34, 3},
+        [ 35] = {35, 1},
+        [ 36] = {36, 2},
+        [ 70] = {37, 4},
+        [ 71] = {38, 3},
+        [ 72] = {39, 1},
+        [ 73] = {40, 2},
+        [166] = { 5, 4},
+        [167] = { 6, 3},
+        [168] = { 7, 1},
+        [169] = { 8, 2},
+        [ 69] = {33, 4}
+    },
+    [1] = {
+        [ 0] = {17, 4},
+        [ 1] = {18, 3},
+        [ 2] = {19, 1},
+        [ 3] = {20, 2},
+        [49] = {21, 4},
+        [50] = {22, 3},
+        [51] = {23, 1},
+        [52] = {24, 2},
+        [61] = {25, 4},
+        [62] = {26, 3},
+        [63] = {27, 1},
+        [64] = {28, 2},
+        [37] = {29, 4},
+        [38] = {30, 3},
+        [39] = {31, 1},
+        [40] = {32, 2},
+        [69] = { 1, 4}
+    },
+    [0] = {
+        [ 0] = { 1, 4},
+        [ 1] = { 2, 3},
+        [ 2] = { 3, 1},
+        [ 3] = { 4, 2},
+        [33] = { 1, 4},
+        [34] = { 2, 3},
+        [35] = { 3, 1},
+        [36] = { 4, 2},
+        [37] = { 1, 4},
+        [38] = { 2, 3},
+        [39] = { 3, 1},
+        [40] = { 4, 2},
+        [16] = { 5, 4},
+        [17] = { 6, 3},
+        [18] = { 7, 1},
+        [19] = { 8, 2},
+        [20] = {13, 4},
+        [21] = {14, 3},
+        [22] = {15, 1},
+        [23] = {16, 2},
+        [41] = { 9, 4},
+        [42] = {10, 3},
+        [43] = {11, 1},
+        [44] = {12, 2},
+        [61] = {13, 4},
+        [62] = {14, 3},
+        [63] = {15, 1},
+        [64] = {16, 2},
+        [69] = { 1, 4}
+    }
+}
+
+local mod = {}
+mod.Sprites = Sprites
+mod.BikeDecoder = BikeDecoder
+mod.MovementDecoder = MovementDecoder
+return mod

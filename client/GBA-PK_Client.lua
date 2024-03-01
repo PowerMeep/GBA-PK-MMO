@@ -16,7 +16,7 @@ local MaxRenderedPlayers = 8
 
 -- Dear Player, please don't mess with anything below this line unless you know what you're doing. ---------------------
 -- This version of the client script is not compatible with the original server script anymore. ------------------------
-local FRLG_SpriteData = require(".SpriteData")
+local FRLG = require(".FireRed_LeafGreen")
 
 
 -- CONSTANTS
@@ -1362,7 +1362,6 @@ local function GetPosition()
     if Bike > 3000 then
         Bike = Bike + BikeOffset
     end
-    LocalPlayerFacing = emu:read8(33779284)
     --Prev map
     LocalPlayerMapIDPrev = emu:read16(33813418)
     if LocalPlayerMapIDPrev == LocalPlayerMapID then
@@ -1377,149 +1376,17 @@ local function GetPosition()
     LocalPlayerMapID = emu:read16(33813416)
     LocalPlayerCurrentX = emu:read16(33779272)
     LocalPlayerCurrentY = emu:read16(33779274)
-    --	console:log("X: " .. LocalPlayerCurrentX)
-    --Male Firered Sprite from 1.0, 1.1, and leafgreen
-    if ((Bike == 160 or Bike == 272) or (Bike == 128 or Bike == 240)) then
-        LocalPlayerGender = 0
-        LocalPlayerMovementMethod = 0
-        --	if TempVar2 == 0 then ConsoleForText:print("Male on Foot") end
-        --Male Firered Biking Sprite
-    elseif (Bike == 320 or Bike == 432 or Bike == 288 or Bike == 400) then
-        LocalPlayerGender = 0
-        LocalPlayerMovementMethod = 1
-        --	if TempVar2 == 0 then ConsoleForText:print("Male on Bike") end
-        --Male Firered Surfing Sprite
-    elseif (Bike == 624 or Bike == 736 or Bike == 592 or Bike == 704) then
-        LocalPlayerGender = 0
-        LocalPlayerMovementMethod = 2
-        --Female sprite
-    elseif ((Bike == 392 or Bike == 504) or (Bike == 360 or Bike == 472)) then
-        LocalPlayerGender = 1
-        LocalPlayerMovementMethod = 0
-        --	if TempVar2 == 0 then ConsoleForText:print("Female on Foot") end
-        --Female Biking sprite
-    elseif ((Bike == 552 or Bike == 664) or (Bike == 520 or Bike == 632)) then
-        LocalPlayerGender = 1
-        LocalPlayerMovementMethod = 1
-        --	if TempVar2 == 0 then ConsoleForText:print("Female on Bike") end
-        --Female Firered Surfing Sprite
-    elseif (Bike == 720 or Bike == 832 or Bike == 688 or Bike == 800) then
-        LocalPlayerGender = 1
-        LocalPlayerMovementMethod = 2
-    else
-        --If in bag when connecting will automatically be firered male
-        --	if TempVar2 == 0 then ConsoleForText:print("Bag/Unknown") end
-    end
+
+    local DecodedBikeAction   = FRLG.BikeDecoder[Bike]
+    LocalPlayerGender         = DecodedBikeAction[1]
+    LocalPlayerMovementMethod = DecodedBikeAction[2]
+
+    LocalPlayerFacing = emu:read8(33779284)
+    local DecodedMovement = FRLG.MovementDecoder[LocalPlayerMovementMethod][LocalPlayerFacing]
+    LocalPlayerExtra1    = DecodedMovement[1]
+    LocalPlayerCurrentDirection = DecodedMovement[2]
 
     if LocalPlayerMovementMethod == 2 then
-        --Facing
-        if LocalPlayerFacing == 0 then
-            LocalPlayerExtra1 = 33
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 1 then
-            LocalPlayerExtra1 = 34
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 2 then
-            LocalPlayerExtra1 = 35
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 3 then
-            LocalPlayerExtra1 = 36
-            LocalPlayerCurrentDirection = 2
-        end
-        --Surfing
-        if LocalPlayerFacing == 29 then
-            LocalPlayerExtra1 = 37
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 30 then
-            LocalPlayerExtra1 = 38
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 31 then
-            LocalPlayerExtra1 = 39
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 32 then
-            LocalPlayerExtra1 = 40
-            LocalPlayerCurrentDirection = 2
-        end
-        --Turning
-        if LocalPlayerFacing == 41 then
-            LocalPlayerExtra1 = 33
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 42 then
-            LocalPlayerExtra1 = 34
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 43 then
-            LocalPlayerExtra1 = 35
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 44 then
-            LocalPlayerExtra1 = 36
-            LocalPlayerCurrentDirection = 2
-        end
-        --hitting a wall
-        if LocalPlayerFacing == 33 then
-            LocalPlayerExtra1 = 33
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 34 then
-            LocalPlayerExtra1 = 34
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 35 then
-            LocalPlayerExtra1 = 35
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 36 then
-            LocalPlayerExtra1 = 36
-            LocalPlayerCurrentDirection = 2
-        end
-        --getting on pokemon
-        if LocalPlayerFacing == 70 then
-            LocalPlayerExtra1 = 37
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 71 then
-            LocalPlayerExtra1 = 38
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 72 then
-            LocalPlayerExtra1 = 39
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 73 then
-            LocalPlayerExtra1 = 40
-            LocalPlayerCurrentDirection = 2
-        end
-        --getting off pokemon
-        if LocalPlayerFacing == 166 then
-            LocalPlayerExtra1 = 5
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 167 then
-            LocalPlayerExtra1 = 6
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 168 then
-            LocalPlayerExtra1 = 7
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 169 then
-            LocalPlayerExtra1 = 8
-            LocalPlayerCurrentDirection = 2
-        end
-        --calling pokemon out
-        if LocalPlayerFacing == 69 then
-            LocalPlayerExtra1 = 33
-            LocalPlayerCurrentDirection = 4
-        end
-
         if ShouldDrawRemotePlayers == 0 then
             if LocalPlayerCurrentDirection == 4 then
                 LocalPlayerExtra1 = 33
@@ -1539,80 +1406,6 @@ local function GetPosition()
             end
         end
     elseif LocalPlayerMovementMethod == 1 then
-        if LocalPlayerFacing == 0 then
-            LocalPlayerExtra1 = 17
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 1 then
-            LocalPlayerExtra1 = 18
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 2 then
-            LocalPlayerExtra1 = 19
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 3 then
-            LocalPlayerExtra1 = 20
-            LocalPlayerCurrentDirection = 2
-        end
-        --Standard speed
-        if LocalPlayerFacing == 49 then
-            LocalPlayerExtra1 = 21
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 50 then
-            LocalPlayerExtra1 = 22
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 51 then
-            LocalPlayerExtra1 = 23
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 52 then
-            LocalPlayerExtra1 = 24
-            LocalPlayerCurrentDirection = 2
-        end
-        --In case you use a fast bike
-        if LocalPlayerFacing == 61 then
-            LocalPlayerExtra1 = 25
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 62 then
-            LocalPlayerExtra1 = 26
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 63 then
-            LocalPlayerExtra1 = 27
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 64 then
-            LocalPlayerExtra1 = 28
-            LocalPlayerCurrentDirection = 2
-        end
-        --hitting a wall
-        if LocalPlayerFacing == 37 then
-            LocalPlayerExtra1 = 29
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 38 then
-            LocalPlayerExtra1 = 30
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 39 then
-            LocalPlayerExtra1 = 31
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 40 then
-            LocalPlayerExtra1 = 32
-            LocalPlayerCurrentDirection = 2
-        end
-
-        --calling pokemon out
-        if LocalPlayerFacing == 69 then
-            LocalPlayerExtra1 = 1
-            LocalPlayerCurrentDirection = 4
-        end
-
         if ShouldDrawRemotePlayers == 0 then
             if LocalPlayerCurrentDirection == 4 then
                 LocalPlayerExtra1 = 17
@@ -1632,135 +1425,6 @@ local function GetPosition()
             end
         end
     else
-        --Standing still
-        if LocalPlayerFacing == 0 then
-            LocalPlayerExtra1 = 1
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 1 then
-            LocalPlayerExtra1 = 2
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 2 then
-            LocalPlayerExtra1 = 3
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 3 then
-            LocalPlayerExtra1 = 4
-            LocalPlayerCurrentDirection = 2
-        end
-
-        --Hitting stuff
-        if LocalPlayerFacing == 33 then
-            LocalPlayerExtra1 = 1
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 34 then
-            LocalPlayerExtra1 = 2
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 35 then
-            LocalPlayerExtra1 = 3
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 36 then
-            LocalPlayerExtra1 = 4
-            LocalPlayerCurrentDirection = 2
-        end
-
-        if LocalPlayerFacing == 37 then
-            LocalPlayerExtra1 = 1
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 38 then
-            LocalPlayerExtra1 = 2
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 39 then
-            LocalPlayerExtra1 = 3
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 40 then
-            LocalPlayerExtra1 = 4
-            LocalPlayerCurrentDirection = 2
-        end
-
-        --Walking
-        if LocalPlayerFacing == 16 then
-            LocalPlayerExtra1 = 5
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 17 then
-            LocalPlayerExtra1 = 6
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 18 then
-            LocalPlayerExtra1 = 7
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 19 then
-            LocalPlayerExtra1 = 8
-            LocalPlayerCurrentDirection = 2
-        end
-
-        --Jumping over route
-        if LocalPlayerFacing == 20 then
-            LocalPlayerExtra1 = 13
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 21 then
-            LocalPlayerExtra1 = 14
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 22 then
-            LocalPlayerExtra1 = 15
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 23 then
-            LocalPlayerExtra1 = 16
-            LocalPlayerCurrentDirection = 2
-        end
-        --Turning
-        if LocalPlayerFacing == 41 then
-            LocalPlayerExtra1 = 9
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 42 then
-            LocalPlayerExtra1 = 10
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 43 then
-            LocalPlayerExtra1 = 11
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 44 then
-            LocalPlayerExtra1 = 12
-            LocalPlayerCurrentDirection = 2
-        end
-        --Running
-        if LocalPlayerFacing == 61 then
-            LocalPlayerExtra1 = 13
-            LocalPlayerCurrentDirection = 4
-        end
-        if LocalPlayerFacing == 62 then
-            LocalPlayerExtra1 = 14
-            LocalPlayerCurrentDirection = 3
-        end
-        if LocalPlayerFacing == 63 then
-            LocalPlayerExtra1 = 15
-            LocalPlayerCurrentDirection = 1
-        end
-        if LocalPlayerFacing == 64 then
-            LocalPlayerExtra1 = 16
-            LocalPlayerCurrentDirection = 2
-        end
-
-        --calling pokemon out
-        if LocalPlayerFacing == 69 then
-            LocalPlayerExtra1 = 1
-            LocalPlayerCurrentDirection = 4
-        end
-
         if ShouldDrawRemotePlayers == 0 then
             if LocalPlayerCurrentDirection == 4 then
                 LocalPlayerExtra1 = 1
@@ -2578,7 +2242,7 @@ local function RenderPlayer(player, renderer)
     if player.PlayerExtra1 >= 17 and player.PlayerExtra1 <= 32 then
         isBiking = 1
         FinalMapX = FinalMapX - 8
-        writeIntegerArrayToEmu(renderer.spriteDataAddress - 80, FRLG_SpriteData[player.Gender][player.SpriteID1])
+        writeIntegerArrayToEmu(renderer.spriteDataAddress - 80, FRLG.Sprites[player.Gender][player.SpriteID1])
         writeRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 0, renderer.spritePointerAddress, 0, 0)
 
     -- Surfing
@@ -2588,7 +2252,7 @@ local function RenderPlayer(player, renderer)
             FinalMapY = FinalMapY + 1
         end
         --Surfing char
-        writeIntegerArrayToEmu(renderer.spriteDataAddress + 512, FRLG_SpriteData[player.Gender][player.SpriteID1])
+        writeIntegerArrayToEmu(renderer.spriteDataAddress + 512, FRLG.Sprites[player.Gender][player.SpriteID1])
         writeRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 128, renderer.spritePointerAddress, 0, 0)
 
         if player.PlayerAnimationFrame2 == 1 and player.PlayerExtra1 <= 36 then
@@ -2597,12 +2261,12 @@ local function RenderPlayer(player, renderer)
         FinalMapX = FinalMapX - 8
         FinalMapY = FinalMapY + 8
         --Sitting char
-        writeIntegerArrayToEmu(renderer.spriteDataAddress - 20, FRLG_SpriteData[player.Gender][player.SpriteID2])
+        writeIntegerArrayToEmu(renderer.spriteDataAddress - 20, FRLG.Sprites[player.Gender][player.SpriteID2])
         writeRenderInstructionToMemory(renderer,  8, FinalMapX, FinalMapY, FacingTemp, 0, renderer.spritePointerAddress + 18, 0, 0)
 
     --Player default
     else
-        writeIntegerArrayToEmu(renderer.spriteDataAddress, FRLG_SpriteData[player.Gender][player.SpriteID1])
+        writeIntegerArrayToEmu(renderer.spriteDataAddress, FRLG.Sprites[player.Gender][player.SpriteID1])
         writeRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 128, renderer.spritePointerAddress, 0, 0)
     end
 
@@ -2618,7 +2282,7 @@ local function RenderPlayer(player, renderer)
             SymbolY = FinalMapY - 16
             SymbolX = FinalMapX + 8
         end
-        writeIntegerArrayToEmu(renderer.spriteDataAddress + 256 + (isBiking * 256) - 80, FRLG_SpriteData[2][1])
+        writeIntegerArrayToEmu(renderer.spriteDataAddress + 256 + (isBiking * 256) - 80, FRLG.Sprites[2][1])
         writeRenderInstructionToMemory(renderer, 16, SymbolX, SymbolY, 64, 0, spritePointer, 0, 1)
      end
     renderer.isDirty = true
