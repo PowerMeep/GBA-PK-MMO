@@ -80,8 +80,6 @@ local SposSquelchCounter = 0
 --- Initially set to "a", updates to "c" after connecting.
 --- Servers may have theirs set to "h".
 local MasterClient = "a"
---- Decryption for positioning/small packets.
-local ReceiveDataSmall = {}
 --- The error the server reported to us when we tried to connect
 local ErrorMessage = ""
 --- Seconds remaining until the client assumes it has lost connection and enters a reconnect loop.
@@ -152,8 +150,15 @@ local HideSeek = 0
 local HideSeekTimer = 0
 local PrevExtraAdr = 0
 local Var8000 = {}
-local Var8000Adr = {}
-local Startvaraddress = 0
+local Var8000Adr = {
+    [1]  = 33779896,
+    [2]  = 33779896 + 2,
+    [3]  = 33779896 + 4,
+    [4]  = 33779896 + 6,
+    [5]  = 33779896 + 8,
+    [6]  = 33779896 + 10,
+    [14] = 33779896 + 26
+}
 local TextSpeedWait = 0
 local OtherPlayerHasCancelled = 0
 local TradeVars = { 0, 0, 0, 0, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" }
@@ -163,6 +168,8 @@ local EnemyBattleVars = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 local Pokemon = { "", "", "", "", "", "" }
 local EnemyPokemon = { "", "", "", "", "", "" }
 
+local MultichoiceAdr = 0
+local BikeOffset = 0
 
 local playerProxies = {}
 local function newPlayerProxy()
@@ -263,7 +270,7 @@ local function updateConsole()
     end
 
     ConsoleForText:clear()
-    setLine(0, "Nickname: " .. Nickname .. " | LockFromScript: " .. LockFromScript .. " | ")
+    setLine(0, "Nickname: " .. Nickname)
     setLine(1, "Game: " .. GameName)
     setLine(2, "Connection: " .. IPAddress .. ":" .. Port)
 
@@ -522,6 +529,9 @@ end
 -- PLAYER RENDERING / ROM INTERACTION ----------------------------------------------------------------------------------
 -- I feel this stuff would do well in a separate file.
 
+local function IsBusy()
+    return emu:read8(50335644) ~= 0
+end
 
 --- Given an array of 32-bit integers and a start address, write each integer to the subsequent address.
 --- Assumes the input is an integer-indexed table, starting with 1, and contains no nil values.
@@ -650,17 +660,8 @@ end
 
 
 local function GetPokemonTeam()
-    local PokemonTeamAddress = 0
-    local PokemonTeamADRTEMP = 0
     local ReadTemp = ""
-    if GameID == "BPR1" or GameID == "BPR2" then
-        --Addresses for Firered
-        PokemonTeamAddress = 33702532
-    elseif GameID == "BPG1" or GameID == "BPG2" then
-        --Addresses for Leafgreen
-        PokemonTeamAddress = 33702532
-    end
-    PokemonTeamADRTEMP = PokemonTeamAddress
+    local PokemonTeamADRTEMP = 33702532
     for j = 1, 6 do
         for i = 1, 25 do
             ReadTemp = emu:read32(PokemonTeamADRTEMP)
@@ -678,19 +679,10 @@ local function GetPokemonTeam()
 end
 
 local function SetEnemyPokemonTeam(EnemyPokemonNo, EnemyPokemonPos)
-    local PokemonTeamAddress = 0
-    local PokemonTeamADRTEMP = 0
-    local ReadTemp = ""
     local String1 = 0
     local String2 = 0
-    if GameID == "BPR1" or GameID == "BPR2" then
-        --Addresses for Firered
-        PokemonTeamAddress = 33701932
-    elseif GameID == "BPG1" or GameID == "BPG2" then
-        --Addresses for Leafgreen
-        PokemonTeamAddress = 33701932
-    end
-    PokemonTeamADRTEMP = PokemonTeamAddress
+    local ReadTemp = ""
+    local PokemonTeamADRTEMP = 33701932
     if EnemyPokemonNo == 0 then
         for j = 1, 6 do
             for i = 1, 25 do
@@ -726,16 +718,6 @@ local function SetEnemyPokemonTeam(EnemyPokemonNo, EnemyPokemonPos)
 end
 
 local function FixAddress()
-    local MultichoiceAdr = 0
-    if GameID == "BPR1" then
-        MultichoiceAdr = 138282176
-    elseif GameID == "BPR2" then
-        MultichoiceAdr = 138282288
-    elseif GameID == "BPG1" then
-        MultichoiceAdr = 138281724
-    elseif GameID == "BPG2" then
-        MultichoiceAdr = 138281836
-    end
     if PrevExtraAdr ~= 0 then
         emu:write32(MultichoiceAdr, PrevExtraAdr)
     end
@@ -783,16 +765,6 @@ local function Loadscript(ScriptNo)
     local Buffer1 = 33692880
     local Buffer2 = 33692912
     local Buffer3 = 33692932
-    local MultichoiceAdr = 0
-    if GameID == "BPR1" then
-        MultichoiceAdr = 138282176
-    elseif GameID == "BPR2" then
-        MultichoiceAdr = 138282288
-    elseif GameID == "BPG1" then
-        MultichoiceAdr = 138281724
-    elseif GameID == "BPG2" then
-        MultichoiceAdr = 138281836
-    end
 
     if ScriptNo == 0 then
         ROMCARD:write32(ScriptAddress2, 4294902380)
@@ -1136,18 +1108,11 @@ local function BattlescriptClassic()
 end
 
 local function SetPokemonData(PokeData)
-    if string.len(EnemyPokemon[1]) < 250 then
-        EnemyPokemon[1] = EnemyPokemon[1] .. PokeData
-    elseif string.len(EnemyPokemon[2]) < 250 then
-        EnemyPokemon[2] = EnemyPokemon[2] .. PokeData
-    elseif string.len(EnemyPokemon[3]) < 250 then
-        EnemyPokemon[3] = EnemyPokemon[3] .. PokeData
-    elseif string.len(EnemyPokemon[4]) < 250 then
-        EnemyPokemon[4] = EnemyPokemon[4] .. PokeData
-    elseif string.len(EnemyPokemon[5]) < 250 then
-        EnemyPokemon[5] = EnemyPokemon[5] .. PokeData
-    elseif string.len(EnemyPokemon[6]) < 250 then
-        EnemyPokemon[6] = EnemyPokemon[6] .. PokeData
+    for i = 1, 6 do
+        if string.len(EnemyPokemon[i]) < 250 then
+            EnemyPokemon[i] = EnemyPokemon[i] .. PokeData
+            break
+        end
     end
 end
 
@@ -1393,56 +1358,25 @@ end
 
 --- Update local variables with info from the emulator.
 local function GetPosition()
-    local BikeAddress = 0
-    local MapAddress = 0
-    local PrevMapIDAddress = 0
-    local ConnectionTypeAddress = 0
-    local PlayerXAddress = 0
-    local PlayerYAddress = 0
-    local PlayerFaceAddress = 0
-    local Bike = 0
-    if GameID == "BPR1" or GameID == "BPR2" then
-        --Addresses for Firered
-        PlayerXAddress = 33779272
-        PlayerYAddress = 33779274
-        PlayerFaceAddress = 33779284
-        MapAddress = 33813416
-        BikeAddress = 33687112
-        PrevMapIDAddress = 33813418
-        ConnectionTypeAddress = 33785351
-        Bike = emu:read16(BikeAddress)
-        if Bike > 3000 then
-            Bike = Bike - 3352
-        end
-    elseif GameID == "BPG1" or GameID == "BPG2" then
-        --Addresses for Leafgreen
-        PlayerXAddress = 33779272
-        PlayerYAddress = 33779274
-        PlayerFaceAddress = 33779284
-        MapAddress = 33813416
-        BikeAddress = 33687112
-        PrevMapIDAddress = 33813418
-        ConnectionTypeAddress = 33785351
-        Bike = emu:read16(BikeAddress)
-        if Bike > 3000 then
-            Bike = Bike - 3320
-        end
+    local Bike = emu:read16(33687112)
+    if Bike > 3000 then
+        Bike = Bike + BikeOffset
     end
-    LocalPlayerFacing = emu:read8(PlayerFaceAddress)
+    LocalPlayerFacing = emu:read8(33779284)
     --Prev map
-    LocalPlayerMapIDPrev = emu:read16(PrevMapIDAddress)
+    LocalPlayerMapIDPrev = emu:read16(33813418)
     if LocalPlayerMapIDPrev == LocalPlayerMapID then
         LocalPlayerPreviousX = LocalPlayerCurrentX
         LocalPlayerPreviousY = LocalPlayerCurrentY
-        LocalPlayerMapEntranceType = emu:read8(ConnectionTypeAddress)
+        LocalPlayerMapEntranceType = emu:read8(33785351)
         if LocalPlayerMapEntranceType > 10 then
             LocalPlayerMapEntranceType = 9
         end
         LocalPlayerMapChange = 1
     end
-    LocalPlayerMapID = emu:read16(MapAddress)
-    LocalPlayerCurrentX = emu:read16(PlayerXAddress)
-    LocalPlayerCurrentY = emu:read16(PlayerYAddress)
+    LocalPlayerMapID = emu:read16(33813416)
+    LocalPlayerCurrentX = emu:read16(33779272)
+    LocalPlayerCurrentY = emu:read16(33779274)
     --	console:log("X: " .. LocalPlayerCurrentX)
     --Male Firered Sprite from 1.0, 1.1, and leafgreen
     if ((Bike == 160 or Bike == 272) or (Bike == 128 or Bike == 240)) then
@@ -1850,30 +1784,9 @@ local function GetPosition()
 end
 
 local function NoPlayersIfScreen()
-    local ScreenData1 = 0
-    local ScreenData3 = 0
-    local ScreenData4 = 0
-    local ScreenDataAddress1 = 0
-    local ScreenDataAddress3 = 0
-    local ScreenDataAddress4 = 0
-    if GameID == "BPR1" or GameID == "BPR2" then
-        --Address for Firered
-        ScreenDataAddress1 = 33691280
-        --For intro
-        ScreenDataAddress3 = 33686716
-        --Check for battle
-        ScreenDataAddress4 = 33685514
-    elseif GameID == "BPG1" or GameID == "BPG2" then
-        --Address for Leafgreen
-        ScreenDataAddress1 = 33691280
-        --For intro
-        ScreenDataAddress3 = 33686716
-        --Check for battle
-        ScreenDataAddress4 = 33685514
-    end
-    ScreenData1 = emu:read32(ScreenDataAddress1)
-    ScreenData3 = emu:read8(ScreenDataAddress3)
-    ScreenData4 = emu:read8(ScreenDataAddress4)
+    local ScreenData1 = emu:read32(33691280)
+    local ScreenData3 = emu:read8(33686716)
+    local ScreenData4 = emu:read8(33685514)
 
     --	if TempVar2 == 0 then ConsoleForText:print("ScreenData: " .. ScreenData1 .. " " .. ScreenData2 .. " " .. ScreenData3) end
     --If screen data are these then hide players
@@ -2594,22 +2507,11 @@ local function CalculateCamera()
 
     local PlayerMapXMoveTemp = 0
     local PlayerMapYMoveTemp = 0
-    local PlayerMapXMoveAddress = 0
-    local PlayerMapYMoveAddress = 0
 
-    if GameID == "BPR1" or GameID == "BPR2" then
-        --Addresses for Firered
-        PlayerMapXMoveAddress = 33687132
-        PlayerMapYMoveAddress = 33687134
-    elseif GameID == "BPG1" or GameID == "BPG2" then
-        --Addresses for Leafgreen
-        PlayerMapXMoveAddress = 33687132
-        PlayerMapYMoveAddress = 33687134
-    end
     --if PlayerMapChange == 1 then
     --Update first if map change
-    LocalPlayerMapXMovePrev = emu:read16(PlayerMapXMoveAddress) - 8
-    LocalPlayerMapYMovePrev = emu:read16(PlayerMapYMoveAddress)
+    LocalPlayerMapXMovePrev = emu:read16(33687132) - 8
+    LocalPlayerMapYMovePrev = emu:read16(33687134)
     PlayerMapXMoveTemp = LocalPlayerMapXMovePrev % 16
     PlayerMapYMoveTemp = LocalPlayerMapYMovePrev % 16
 
@@ -2760,42 +2662,48 @@ local function DrawChars()
     end
 end
 
-local function onRemotePlayerUpdate(player)
-    if player.CurrentMapID ~= ReceiveDataSmall[14]  then
+local function onRemotePlayerUpdate(player, payload)
+    local x      = tonumber(string.sub(payload, 5, 8)) - 2000
+    local y      = tonumber(string.sub(payload, 9, 12)) - 2000
+    local facing = tonumber(string.sub(payload, 13, 15)) - 100
+    local gender = tonumber(string.sub(payload, 19, 19))
+    local map = tonumber(string.sub(payload, 22, 27)) - 100000
+
+    if player.CurrentMapID ~= map  then
         player.PlayerAnimationFrame = 0
         player.PlayerAnimationFrame2 = 0
         player.PlayerAnimationFrameMax = 0
-        player.CurrentMapID = ReceiveDataSmall[14]
-        player.PreviousMapID = ReceiveDataSmall[15]
-        player.MapEntranceType = ReceiveDataSmall[16]
+        player.CurrentMapID = map
+        player.PreviousMapID = tonumber(string.sub(payload, 28, 33)) - 100000
+        player.MapEntranceType = tonumber(string.sub(payload, 34, 34))
         -- Set the position of where they were last on their previous map
         player.PreviousX = player.CurrentX
         player.PreviousY = player.CurrentY
         -- The future position and current position will be the same briefly
-        player.CurrentX = ReceiveDataSmall[7]
-        player.CurrentY = ReceiveDataSmall[8]
+        player.CurrentX = x
+        player.CurrentY = y
         -- A flag indicating that this player has recently changed maps
         player.MapChange = 1
 
         -- TODO: this would be a great place to update map offsets and/or relative positions
     end
     -- Where the player should animate toward
-    player.FutureX = ReceiveDataSmall[7]
-    player.FutureY = ReceiveDataSmall[8]
+    player.FutureX = x
+    player.FutureY = y
     -- Misc data about this player
-    player.PlayerExtra1 = ReceiveDataSmall[10]
+    player.PlayerExtra1 = tonumber(string.sub(payload, 16, 18)) - 100
 
     if DebugGenderSwitch then
-        player.Gender = 1 - ReceiveDataSmall[11]
+        player.Gender = 1 - gender
     else
-        player.Gender = ReceiveDataSmall[11]
+        player.Gender = gender
     end
 
-    player.MovementMethod = ReceiveDataSmall[12]
-    player.IsInBattle = ReceiveDataSmall[13]
+    player.MovementMethod = tonumber(string.sub(payload, 20, 20))
+    player.IsInBattle = tonumber(string.sub(payload, 21, 21))
     -- Where this player entered their map
-    player.StartX = ReceiveDataSmall[18]
-    player.StartY = ReceiveDataSmall[19]
+    player.StartX = tonumber(string.sub(payload, 35, 38)) - 2000
+    player.StartY = tonumber(string.sub(payload, 39, 42)) - 2000
 
     -- Determine current state from sprite
     HandleSprites(player)
@@ -2829,34 +2737,42 @@ local function GetGameVersion()
     if (GameCode == "AGB-BPRE") or (GameCode == "AGB-ZBDM")
     then
         local GameVersion = emu:read16(134217916)
+        BikeOffset = -3352
         if GameVersion == 26624 then
             GameName = "Pokemon FireRed 1.0"
             EnableScript = true
             GameID = "BPR1"
+            MultichoiceAdr = 138282176
         elseif GameVersion == 26369 then
             GameName = "Pokemon FireRed 1.1"
             EnableScript = true
             GameID = "BPR2"
+            MultichoiceAdr = 138282288
         else
             GameName = "Pokemon FireRed (Unknown Version)"
             EnableScript = true
             GameID = "BPR1"
+            MultichoiceAdr = 138282176
         end
     elseif (GameCode == "AGB-BPGE")
     then
+        BikeOffset = -3320
         local GameVersion = emu:read16(134217916)
         if GameVersion == 33024 then
             GameName = "Pokemon LeafGreen 1.0"
             EnableScript = true
             GameID = "BPG1"
+            MultichoiceAdr = 138281724
         elseif GameVersion == 32769 then
             GameName = "Pokemon LeafGreen 1.1"
             EnableScript = true
             GameID = "BPG2"
+            MultichoiceAdr = 138281836
         else
             GameName = "Pokemon LeafGreen (Unknown Version)"
             EnableScript = true
             GameID = "BPG1"
+            MultichoiceAdr = 138281724
         end
     elseif (GameCode == "AGB-BPEE")
     then
@@ -2924,93 +2840,29 @@ function onDataReceived()
     local recipient   = string.sub(ReadData, 9, 16)
     --- The type of data in the packet.
     local messageType = string.sub(ReadData, 17, 20)
+    --- The data that was received
+    local payload     = string.sub(ReadData, 21, 63)
 
     if messageType == "SLNK" then
-        ReceiveDataSmall[6] = string.sub(ReadData, 21, 30)
-        ReceiveDataSmall[6] = tonumber(ReceiveDataSmall[6])
-        if ReceiveDataSmall[6] ~= 0 then
-            ReceiveDataSmall[6] = ReceiveDataSmall[6] - 1000000000
-            ReceiveMultiplayerPackets(ReceiveDataSmall[6])
+        local data = tonumber(string.sub(payload, 1, 10))
+        if data ~= 0 then
+            ReceiveMultiplayerPackets(data - 1000000000)
         end
     elseif messageType == "POKE" then
-        local PokeTemp2 = string.sub(ReadData, 21, 45)
+        local PokeTemp2 = string.sub(payload, 1, 25)
         SetPokemonData(PokeTemp2)
     elseif messageType == "TRAD" then
-        EnemyTradeVars[1] = string.sub(ReadData, 21, 21)
-        EnemyTradeVars[2] = string.sub(ReadData, 22, 22)
-        EnemyTradeVars[3] = string.sub(ReadData, 23, 23)
-        EnemyTradeVars[5] = string.sub(ReadData, 24, 63)
-        EnemyTradeVars[1] = tonumber(EnemyTradeVars[1])
-        EnemyTradeVars[2] = tonumber(EnemyTradeVars[2])
-        EnemyTradeVars[3] = tonumber(EnemyTradeVars[3])
+        for i = 1, 3 do
+            EnemyTradeVars[i] = tonumber(string.sub(payload, i, i))
+        end
+        EnemyTradeVars[5] = string.sub(payload, 4, 43)
+
     elseif messageType == "BATT" then
-        EnemyBattleVars[1] = string.sub(ReadData, 21, 21)
-        EnemyBattleVars[2] = string.sub(ReadData, 22, 22)
-        EnemyBattleVars[3] = string.sub(ReadData, 23, 23)
-        EnemyBattleVars[4] = string.sub(ReadData, 24, 24)
-        EnemyBattleVars[5] = string.sub(ReadData, 25, 25)
-        EnemyBattleVars[6] = string.sub(ReadData, 26, 26)
-        EnemyBattleVars[7] = string.sub(ReadData, 27, 27)
-        EnemyBattleVars[8] = string.sub(ReadData, 28, 28)
-        EnemyBattleVars[9] = string.sub(ReadData, 29, 29)
-        EnemyBattleVars[10] = string.sub(ReadData, 30, 30)
-        EnemyBattleVars[1] = tonumber(EnemyBattleVars[1])
-        EnemyBattleVars[2] = tonumber(EnemyBattleVars[2])
-        EnemyBattleVars[3] = tonumber(EnemyBattleVars[3])
-        EnemyBattleVars[4] = tonumber(EnemyBattleVars[4])
-        EnemyBattleVars[5] = tonumber(EnemyBattleVars[5])
-        EnemyBattleVars[6] = tonumber(EnemyBattleVars[6])
-        EnemyBattleVars[7] = tonumber(EnemyBattleVars[7])
-        EnemyBattleVars[8] = tonumber(EnemyBattleVars[8])
-        EnemyBattleVars[9] = tonumber(EnemyBattleVars[9])
-        EnemyBattleVars[10] = tonumber(EnemyBattleVars[10])
+        for i = 1, 10 do
+            EnemyBattleVars[i] = tonumber(string.sub(payload, i, i))
+        end
 
     else
-        --Decryption for packet
-        --Extra bytes connected to sent request
-        ReceiveDataSmall[6] = string.sub(ReadData, 21, 24)
-        ReceiveDataSmall[6] = tonumber(ReceiveDataSmall[6])
-        --X
-        ReceiveDataSmall[7] = string.sub(ReadData, 25, 28)
-        ReceiveDataSmall[7] = tonumber(ReceiveDataSmall[7]) - 2000
-        --Y
-        ReceiveDataSmall[8] = string.sub(ReadData, 29, 32)
-        ReceiveDataSmall[8] = tonumber(ReceiveDataSmall[8]) - 2000
-        --Facing (not used)
-        ReceiveDataSmall[9] = string.sub(ReadData, 33, 35)
-        ReceiveDataSmall[9] = tonumber(ReceiveDataSmall[9]) - 100
-        --Extra 1
-        ReceiveDataSmall[10] = string.sub(ReadData, 36, 38)
-        ReceiveDataSmall[10] = tonumber(ReceiveDataSmall[10])
-        ReceiveDataSmall[10] = ReceiveDataSmall[10] - 100
-        --Gender
-        ReceiveDataSmall[11] = string.sub(ReadData, 39, 39)
-        ReceiveDataSmall[11] = tonumber(ReceiveDataSmall[11])
-        --Movement Method
-        ReceiveDataSmall[12] = string.sub(ReadData, 40, 40)
-        ReceiveDataSmall[12] = tonumber(ReceiveDataSmall[12])
-        --Battling
-        ReceiveDataSmall[13] = string.sub(ReadData, 41, 41)
-        ReceiveDataSmall[13] = tonumber(ReceiveDataSmall[13])
-        --MapID
-        ReceiveDataSmall[14] = string.sub(ReadData, 42, 47)
-        ReceiveDataSmall[14] = tonumber(ReceiveDataSmall[14]) - 100000
-        --PreviousMapID
-        ReceiveDataSmall[15] = string.sub(ReadData, 48, 53)
-        ReceiveDataSmall[15] = tonumber(ReceiveDataSmall[15]) - 100000
-        --MapConnectionType
-        ReceiveDataSmall[16] = string.sub(ReadData, 54, 54)
-        ReceiveDataSmall[16] = tonumber(ReceiveDataSmall[16])
-        --StartX
-        ReceiveDataSmall[18] = string.sub(ReadData, 55, 58)
-        ReceiveDataSmall[18] = tonumber(ReceiveDataSmall[18]) - 2000
-        --StartY
-        ReceiveDataSmall[19] = string.sub(ReadData, 59, 62)
-        ReceiveDataSmall[19] = tonumber(ReceiveDataSmall[19]) - 2000
-        --Between 53 and 63 there are 11 bytes of filler.
-
-        --	if messageType == "DTRA" then ConsoleForText:print("Locktype: " .. LockFromScript) end
-
         if messageType == "RPOK" then
             GetPokemonTeam()
             CreatePacketSpecial("POKE")
@@ -3018,8 +2870,7 @@ function onDataReceived()
             SendData("GPOS")
         elseif messageType == "RBAT" then
             --If player requests for a battle
-            local TooBusyByte = emu:read8(50335644)
-            if (TooBusyByte ~= 0 or LockFromScript ~= 0) then
+            if (IsBusy() or LockFromScript ~= 0) then
                 SendData("TBUS")
             else
                 OtherPlayerHasCancelled = 0
@@ -3029,8 +2880,7 @@ function onDataReceived()
             end
         elseif messageType == "RTRA" then
             --If player requests for a trade
-            local TooBusyByte = emu:read8(50335644)
-            if (TooBusyByte ~= 0 or LockFromScript ~= 0) then
+            if (IsBusy() or LockFromScript ~= 0) then
                 SendData("TBUS")
             else
                 OtherPlayerHasCancelled = 0
@@ -3103,7 +2953,7 @@ function onDataReceived()
             ErrorMessage = ""
             MasterClient = "c"
         elseif messageType == "DENY" then
-            local reason = string.sub(ReadData, 21, 24)
+            local reason = string.sub(payload, 1, 4)
             if tonumber(reason) ~= nil then
                 ErrorMessage = "Server requires client script version " .. reason .. " or higher."
             elseif reason == "FULL" then
@@ -3126,7 +2976,7 @@ function onDataReceived()
                 player = newPlayerProxy()
                 playerProxies[sender] = player
             end
-            onRemotePlayerUpdate(player)
+            onRemotePlayerUpdate(player, payload)
         elseif messageType == "EXIT" then
             playerProxies[sender] = nil
         else
@@ -3165,7 +3015,6 @@ local function onKeysRead()
         local TalkingDirX = 0
         local TalkingDirY = 0
         local AddressGet = ""
-        local TooBusyByte = emu:read8(50335644)
 
         --Hide n seek
         if LockFromScript == 1 then
@@ -3228,7 +3077,7 @@ local function onKeysRead()
                 --		ConsoleForText:print("Pressed A")
 
                 --SCRIPTS. LOCK AND PREVENT SPAM PRESS.
-                if LockFromScript == 0 and Keypressholding == 0 and TooBusyByte == 0 then
+                if LockFromScript == 0 and Keypressholding == 0 and not IsBusy() then
                     --HIDE N SEEK AT DESK IN ROOM
                     if MasterClient == "h" and LocalPlayerCurrentDirection == 3 and LocalPlayerCurrentX == -991 and LocalPlayerCurrentY == -991 and LocalPlayerMapID == 260 then
                         --Server config through bedroom drawer
@@ -3400,33 +3249,9 @@ local function onFrameCompleted()
     GetPosition()
     DoRealTimeUpdates()
 
-    --VARS--
-    if GameID == "BPR1" or GameID == "BPR2" then
-        Startvaraddress = 33779896
-    elseif GameID == "BPG1" or GameID == "BPG2" then
-        Startvaraddress = 33779896
+    for key, adr in pairs(Var8000Adr) do
+        Var8000[key] = tonumber(emu:read16(adr))
     end
-    Var8000Adr[1] = Startvaraddress
-    Var8000Adr[2] = Startvaraddress + 2
-    Var8000Adr[3] = Startvaraddress + 4
-    Var8000Adr[4] = Startvaraddress + 6
-    Var8000Adr[5] = Startvaraddress + 8
-    Var8000Adr[6] = Startvaraddress + 10
-    Var8000Adr[14] = Startvaraddress + 26
-    Var8000[1] = emu:read16(Var8000Adr[1])
-    Var8000[2] = emu:read16(Var8000Adr[2])
-    Var8000[3] = emu:read16(Var8000Adr[3])
-    Var8000[4] = emu:read16(Var8000Adr[4])
-    Var8000[5] = emu:read16(Var8000Adr[5])
-    Var8000[6] = emu:read16(Var8000Adr[6])
-    Var8000[14] = emu:read16(Var8000Adr[14])
-    Var8000[1] = tonumber(Var8000[1])
-    Var8000[2] = tonumber(Var8000[2])
-    Var8000[3] = tonumber(Var8000[3])
-    Var8000[4] = tonumber(Var8000[4])
-    Var8000[5] = tonumber(Var8000[5])
-    Var8000[6] = tonumber(Var8000[6])
-    Var8000[14] = tonumber(Var8000[14])
 
     --BATTLE/TRADE--
 
