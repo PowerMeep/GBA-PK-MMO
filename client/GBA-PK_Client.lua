@@ -1376,12 +1376,15 @@ local function GetPosition()
     LocalPlayerMapID = emu:read16(33813416)
     LocalPlayerCurrentX = emu:read16(33779272)
     LocalPlayerCurrentY = emu:read16(33779274)
+    LocalPlayerFacing = emu:read8(33779284)
 
     local DecodedBikeAction   = FRLG.BikeDecoder[Bike]
+    -- If no value could be read for the Bike, then don't try to decode it.
+    if DecodedBikeAction == nil then return end
+
     LocalPlayerGender         = DecodedBikeAction[1]
     LocalPlayerMovementMethod = DecodedBikeAction[2]
 
-    LocalPlayerFacing = emu:read8(33779284)
     local DecodedMovement = FRLG.MovementDecoder[LocalPlayerMovementMethod][LocalPlayerFacing]
     LocalPlayerExtra1    = DecodedMovement[1]
     LocalPlayerCurrentDirection = DecodedMovement[2]
