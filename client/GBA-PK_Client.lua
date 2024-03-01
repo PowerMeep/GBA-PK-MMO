@@ -67,12 +67,11 @@ local DeltaTime = 0
 
 -- NETWORKING
 --- The socket used for communications with the server.
---- TODO: if loaded in a non-mGBA context, then socket may not be provided.
 local SocketMain = ""
---- The last position packet created by this client.
-local LastSposPacket = ""
---- How many identical position packets to skip sending to the server.
---- Note that after the timer is up, this will attempt to send every frame.
+--- The last position payload created by this client.
+local LastSposPayload = ""
+--- How many identical position payloads to skip sending to the server.
+--- After the timer is up, this will attempt to send every frame.
 local NumSposToSquelch = 120
 --- How many identical position packets have been skipped.
 local SposSquelchCounter = 0
@@ -291,121 +290,101 @@ local function updateConsole()
     end
 end
 
--- NETWORKING
+-- PACKET SENDING ------------------------------------------------------------------------------------------------------
+local function _SendData(PacketType, Recipient, Payload)
+    -- If we didn't get a payload at all, initialize to empty string
+    if Payload == nil then Payload = "" end
 
---- Format a standard packet to send to the server.
-local function CreatePacket(RequestTemp, PacketTemp, Recipient)
-
-    if Recipient == nil then
-        Recipient = ServerName
+    -- If the payload is less than 43 characters long, add filler
+    local PayloadLen = string.len(Payload)
+    if PayloadLen < 43 then
+        Payload = Payload .. string.rep("0", 43 - PayloadLen)
     end
 
+    -- If the payload is greater than the maximum, block it and report an error
+    if PayloadLen > 43 then
+        console:log("Error - tried to send a " .. PacketType .. " packet that was too long")
+    else
+        local packet = Nickname .. Recipient .. PacketType .. Payload .. "U"
+        SocketMain:send(packet)
+    end
+end
+
+local function SendToServer(PacketType, Payload)
+    _SendData(PacketType, ServerName, Payload)
+end
+
+local function SendToPlayer(PacketType, Payload)
+    _SendData(PacketType, PlayerTalkingID2, Payload)
+end
+
+local function SendPositionToServer()
     -- I'd rather this be on one line, but doing it this way
     -- makes it a lot easier to troubleshoot when one of these values is nil
     --
     -- These values are padded to a specific length.
     -- In the case of numerics, this is achieved by adding a larger number to them.
-    local FillerStuff = "F"
-    local Packet = ""
-    Packet = Packet .. Nickname
-    Packet = Packet .. Recipient
-    Packet = Packet .. RequestTemp
-    Packet = Packet .. PacketTemp
-    Packet = Packet .. (LocalPlayerCurrentX + 2000)
-    Packet = Packet .. (LocalPlayerCurrentY + 2000)
-    Packet = Packet .. (LocalPlayerFacing + 100)
-    Packet = Packet .. (LocalPlayerExtra1 + 100)
-    Packet = Packet .. LocalPlayerGender
-    Packet = Packet .. LocalPlayerMovementMethod
-    Packet = Packet .. LocalPlayerIsInBattle
-    Packet = Packet .. (LocalPlayerMapID + 100000)
-    Packet = Packet .. (LocalPlayerMapIDPrev + 100000)
-    Packet = Packet .. LocalPlayerMapEntranceType
-    Packet = Packet .. (LocalPlayerStartX + 2000)
-    Packet = Packet .. (LocalPlayerStartY + 2000)
-    Packet = Packet .. FillerStuff .. "U"
-    return Packet
+    local Payload = "1000"
+    Payload = Payload .. (LocalPlayerCurrentX + 2000)
+    Payload = Payload .. (LocalPlayerCurrentY + 2000)
+    Payload = Payload .. (LocalPlayerFacing + 100)
+    Payload = Payload .. (LocalPlayerExtra1 + 100)
+    Payload = Payload .. LocalPlayerGender
+    Payload = Payload .. LocalPlayerMovementMethod
+    Payload = Payload .. LocalPlayerIsInBattle
+    Payload = Payload .. (LocalPlayerMapID + 100000)
+    Payload = Payload .. (LocalPlayerMapIDPrev + 100000)
+    Payload = Payload .. LocalPlayerMapEntranceType
+    Payload = Payload .. (LocalPlayerStartX + 2000)
+    Payload = Payload .. (LocalPlayerStartY + 2000)
+
+    if (Payload == LastSposPayload) and SposSquelchCounter < NumSposToSquelch then
+        SposSquelchCounter = SposSquelchCounter + 1
+    else
+        UpdatePositionTimer = UpdatePositionTimer + SecondsBetweenPositionUpdates
+        SposSquelchCounter = 0
+        LastSposPayload = Payload
+        SendToServer("SPOS", Payload)
+    end
 end
 
---- Creates a "special" packet.
---- I believe these are for Link Cable communications.
-local function CreatePacketSpecial(RequestTemp, OptionalData)
-    if RequestTemp == "POKE" then
-        local PokeTemp
-        local StartNum = 0
-        local StartNum2 = 0
-        local Filler = "FFFFFFFFFFFFFFFFFF"
-        for j = 1, 6 do
-            for i = 1, 10 do
-                StartNum = ((i - 1) * 25) + 1
-                StartNum2 = StartNum + 24
-                PokeTemp = string.sub(Pokemon[j], StartNum, StartNum2)
-                SocketMain:send(Nickname .. PlayerTalkingID2 .. RequestTemp .. PokeTemp .. Filler .. "U")
-            end
+local function RequestRawPokemonData()
+    for i = 1, 6 do
+        EnemyPokemon[i] = ""
+    end
+    SendToPlayer("RPOK")
+end
+
+local function SendRawPokemonData()
+    local PokeTemp
+    local StartNum = 0
+    local StartNum2 = 0
+    for j = 1, 6 do
+        for i = 1, 10 do
+            StartNum = ((i - 1) * 25) + 1
+            StartNum2 = StartNum + 24
+            PokeTemp = string.sub(Pokemon[j], StartNum, StartNum2)
+            SendToPlayer("POKE", PokeTemp)
         end
-    elseif RequestTemp == "TRAD" then
-        SocketMain:send(Nickname .. PlayerTalkingID2 .. RequestTemp .. TradeVars[1] .. TradeVars[2] .. TradeVars[3] .. TradeVars[5] .. "U")
-        --4 + 4 + 4 + 4 + 4 + 3 + 40 + 1
-    elseif RequestTemp == "BATT" then
-        local FillerSend = "100000000000000000000000000000000"
-        SocketMain:send(Nickname .. PlayerTalkingID2 .. RequestTemp .. BattleVars[1] .. BattleVars[2] .. BattleVars[3] .. BattleVars[4] .. BattleVars[5] .. BattleVars[6] .. BattleVars[7] .. BattleVars[8] .. BattleVars[9] .. BattleVars[10] .. FillerSend .. "U")
-    elseif RequestTemp == "SLNK" then
-        OptionalData = OptionalData or 0
-        local Filler = "100000000000000000000000000000000"
-        local SizeAct = OptionalData + 1000000000
-        --		SizeAct = tostring(SizeAct)
-        --		SizeAct = string.format("%.0f",SizeAct)
-        SocketMain:send( Nickname .. PlayerTalkingID2 .. RequestTemp .. SizeAct .. Filler .. "U")
     end
 end
 
---- Factory to create the given packet, then send it.
-local function SendData(DataType, ExtraData)
-    local Packet = ""
-    if (DataType == "GPOS") then
-        Packet = CreatePacket("GPOS", "1000")
-    elseif (DataType == "Hide") then
-        Packet = CreatePacket("HIDE", "1000")
-    elseif (DataType == "POKE") then
-        CreatePacketSpecial("POKE")
-    elseif (DataType == "RPOK") then
-        EnemyPokemon[1] = ""
-        EnemyPokemon[2] = ""
-        EnemyPokemon[3] = ""
-        EnemyPokemon[4] = ""
-        EnemyPokemon[5] = ""
-        EnemyPokemon[6] = ""
-        Packet = CreatePacket("RPOK", "1000", PlayerTalkingID2)
-    elseif (DataType == "RTRA") then
-        Packet = CreatePacket("RTRA", "1000", PlayerTalkingID2)
-    elseif (DataType == "RBAT") then
-        Packet = CreatePacket("RBAT", "1000", PlayerTalkingID2)
-    elseif (DataType == "STRA") then
-        Packet = CreatePacket("STRA", "1000", PlayerTalkingID2)
-    elseif (DataType == "SBAT") then
-        Packet = CreatePacket("SBAT", "1000", PlayerTalkingID2)
-    elseif (DataType == "DTRA") then
-        Packet = CreatePacket("DTRA", "1000", PlayerTalkingID2)
-    elseif (DataType == "DBAT") then
-        Packet = CreatePacket("DBAT", "1000", PlayerTalkingID2)
-    elseif (DataType == "CTRA") then
-        Packet = CreatePacket("CTRA", "1000", PlayerTalkingID2)
-    elseif (DataType == "CBAT") then
-        Packet = CreatePacket("CBAT", "1000", PlayerTalkingID2)
-    elseif (DataType == "TBUS") then
-        Packet = CreatePacket("TBUS", "1000", PlayerTalkingID2)
-    elseif (DataType == "ROFF") then
-        Packet = CreatePacket("ROFF", "1000", PlayerTalkingID2)
-    elseif (DataType == "TRAD") then
-        CreatePacketSpecial("TRAD")
-    elseif (DataType == "BATT") then
-        CreatePacketSpecial("BATT")
-    end
-
-    if string.len(Packet) > 0 then
-        SocketMain:send(Packet)
-    end
+local function SendRawTradeData()
+    SendToPlayer("TRAD", TradeVars[1] .. TradeVars[2] .. TradeVars[3] .. TradeVars[5])
 end
+
+local function SendRawBattleData()
+    SendToPlayer("BATT", BattleVars[1] .. BattleVars[2] .. BattleVars[3] .. BattleVars[4] .. BattleVars[5] .. BattleVars[6] .. BattleVars[7] .. BattleVars[8] .. BattleVars[9] .. BattleVars[10])
+end
+
+local function SendRawLinkData(size)
+    size = size or 0
+    local SizeAct = size + 1000000000
+    --		SizeAct = tostring(SizeAct)
+    --		SizeAct = string.format("%.0f",SizeAct)
+    SendToPlayer("SLNK", SizeAct)
+end
+
 
 local function SendMultiplayerPackets(Offset, size)
     local Packet = ""
@@ -419,7 +398,7 @@ local function SendMultiplayerPackets(Offset, size)
     end
     local ModifiedRead = ""
     if size > 0 then
-        CreatePacketSpecial("SLNK", size)
+        SendRawLinkData(size)
         for i = 1, size do
             --Inverse of i, size remaining. 1 = last. Also size represents hex bytes, which goes up to 255 in decimal, so we triple it.
             ModifiedSize = size - i + 1
@@ -509,21 +488,6 @@ local function ReceiveMultiplayerPackets(size)
     end
 end
 
---- Attempt to establish a connection with a server using the provided information.
-local function connectToServer()
-    if MasterClient ~= "c" then
-        console:log("Attempting to connect to server...")
-        SocketMain = socket.tcp()
-        local success, _ = SocketMain:connect(IPAddress, Port)
-        if success then
-            console:log("Joining game...")
-            SocketMain:send(Nickname .. ClientVersionNumber .. GameID .. "JOIN" .. string.rep("F", 43) .. "U")
-            SocketMain:add("received", onDataReceived)
-        else
-            console:log("Could not connect to server.")
-        end
-    end
-end
 
 
 -- PLAYER RENDERING / ROM INTERACTION ----------------------------------------------------------------------------------
@@ -635,7 +599,8 @@ local function eraseRenderInstructionFromMemory(renderer, offset)
             0,
             12,
             0,
-            1)
+            1
+    )
 end
 
 local function eraseAllPlayerRenderInstructions(renderer)
@@ -1104,7 +1069,7 @@ local function BattlescriptClassic()
         LockFromScript = 0
     end
 
-    CreatePacketSpecial("BATT")
+    SendRawBattleData()
 end
 
 local function SetPokemonData(PokeData)
@@ -1167,7 +1132,7 @@ local function Tradescript()
         --You have canceled or have not selected a valid pokemon slot
     elseif Var8000[2] == 1 and TradeVars[1] == 1 then
         Loadscript(16)
-        SendData("CTRA")
+        SendToPlayer("CTRA")
         LockFromScript = 0
         TradeVars[1] = 0
         TradeVars[2] = 0
@@ -1223,7 +1188,7 @@ local function Tradescript()
     elseif TradeVars[1] == 3 then
         --If you decline
         if Var8000[2] == 1 then
-            SendData("ROFF")
+            SendToPlayer("ROFF")
             Loadscript(16)
             LockFromScript = 7
             TradeVars[1] = 0
@@ -1298,7 +1263,7 @@ local function Tradescript()
         end
     end
 
-    CreatePacketSpecial("TRAD")
+    SendRawTradeData()
 end
 
 local function UpdatePlayerVisibility(player)
@@ -2396,8 +2361,6 @@ local function ClearAllVar()
 end
 
 --- Grabs the ROM metadata from mGBA and determines which game and whether it is supported.
---- TODO: this would also be the place to build a table of addresses for that game to avoid
----  having to re-check the game ID everywhere.
 local function GetGameVersion()
     ROMCARD = emu.memory.cart0
     local GameCode = emu:getGameCode()
@@ -2489,7 +2452,7 @@ local function onGameShutdown()
 end
 
 --- Called by the socket anytime data is available to be consumed.
-function onDataReceived()
+local function onDataReceived()
     if not EnableScript then return end
     if not SocketMain:hasdata() then return end
 
@@ -2532,13 +2495,13 @@ function onDataReceived()
     else
         if messageType == "RPOK" then
             GetPokemonTeam()
-            CreatePacketSpecial("POKE")
+            SendRawPokemonData()
         elseif messageType == "GPOS" then
-            SendData("GPOS")
+            SendToServer("GPOS")
         elseif messageType == "RBAT" then
             --If player requests for a battle
             if (IsBusy() or LockFromScript ~= 0) then
-                SendData("TBUS")
+                SendToPlayer("TBUS")
             else
                 OtherPlayerHasCancelled = 0
                 LockFromScript = 10
@@ -2548,7 +2511,7 @@ function onDataReceived()
         elseif messageType == "RTRA" then
             --If player requests for a trade
             if (IsBusy() or LockFromScript ~= 0) then
-                SendData("TBUS")
+                SendToPlayer("TBUS")
             else
                 OtherPlayerHasCancelled = 0
                 LockFromScript = 11
@@ -2579,7 +2542,7 @@ function onDataReceived()
             end
         elseif messageType == "SBAT" and sender == PlayerTalkingID2 and LockFromScript == 4 then
             --If player accepts your battle request
-            SendData("RPOK")
+            RequestRawPokemonData()
             if Var8000[2] ~= 0 then
                 LockFromScript = 8
                 Loadscript(13)
@@ -2588,7 +2551,7 @@ function onDataReceived()
             end
         elseif messageType == "STRA" and sender == PlayerTalkingID2 and LockFromScript == 5 then
             --If player accepts your trade request
-            SendData("RPOK")
+            RequestRawPokemonData()
             if Var8000[2] ~= 0 then
                 LockFromScript = 9
             else
@@ -2711,7 +2674,7 @@ local function onKeysRead()
                     Loadscript(3)
                     Keypressholding = 1
                     Keypress = 1
-                    --			SendData("RBAT", Player2)
+                    --			SendToPlayer("RBAT")
 
                 elseif Var8000[1] == 2 then
                     --			ConsoleForText:print("Trade selected")
@@ -2720,7 +2683,7 @@ local function onKeysRead()
                     Loadscript(4)
                     Keypressholding = 1
                     Keypress = 1
-                    SendData("RTRA")
+                    SendToPlayer("RTRA")
 
                 elseif Var8000[1] == 3 then
                     --			ConsoleForText:print("Card selected")
@@ -2784,12 +2747,12 @@ local function onKeysRead()
                 if LockFromScript == 4 and Keypressholding == 0 and Var8000[2] ~= 0 then
                     --Cancel battle request
                     Loadscript(15)
-                    SendData("CBAT")
+                    SendToPlayer("CBAT")
                     LockFromScript = 0
                 elseif LockFromScript == 5 and Keypressholding == 0 and Var8000[2] ~= 0 then
                     --Cancel trade request
                     Loadscript(16)
-                    SendData("CTRA")
+                    SendToPlayer("CTRA")
                     LockFromScript = 0
                     TradeVars[1] = 0
                     TradeVars[2] = 0
@@ -2798,7 +2761,7 @@ local function onKeysRead()
                 elseif LockFromScript == 9 and (TradeVars[1] == 2 or TradeVars[1] == 4) and Keypressholding == 0 and Var8000[2] ~= 0 then
                     --Cancel trade request
                     Loadscript(16)
-                    SendData("CTRA")
+                    SendToPlayer("CTRA")
                     LockFromScript = 0
                     TradeVars[1] = 0
                     TradeVars[2] = 0
@@ -2833,7 +2796,7 @@ local function onKeysRead()
                 --		WriteBuffers(33692912, TestString, 4)
                 --	ConsoleForText:print("String: " .. TestString)
 
-                --		SendData("RPOK",Player2)
+                --		RequestPokemonData()
                 --		if EnemyPokemon[6] ~= 0 then
                 --			SetEnemyPokemonTeam(0,1)
                 --		end
@@ -2851,6 +2814,19 @@ local function onKeysRead()
     end
 end
 
+local function ConnectToServer()
+    console:log("Attempting to connect to server...")
+    SocketMain = socket.tcp()
+    local success, _ = SocketMain:connect(IPAddress, Port)
+    if success then
+        console:log("Joining game...")
+        _SendData("JOIN", ClientVersionNumber .. GameID)
+        SocketMain:add("received", onDataReceived)
+    else
+        console:log("Could not connect to server.")
+    end
+end
+
 local function OnTimeout()
     ReconnectTimer = SecondsBetweenReconnects
     SocketMain:close()
@@ -2858,19 +2834,6 @@ local function OnTimeout()
     console:log("You have timed out")
     for key, _ in pairs(playerProxies) do
         playerProxies[key] = nil
-    end
-end
-
-local function SendPositionToServer()
-    --Send your positional data
-    local Packet = CreatePacket("SPOS", "1000", ServerName)
-    if (Packet == LastSposPacket) and SposSquelchCounter < NumSposToSquelch then
-        SposSquelchCounter = SposSquelchCounter + 1
-    else
-        UpdatePositionTimer = UpdatePositionTimer + SecondsBetweenPositionUpdates
-        SposSquelchCounter = 0
-        LastSposPacket = Packet
-        SocketMain:send(Packet)
     end
 end
 
@@ -2884,16 +2847,15 @@ local function DoRealTimeUpdates()
             SendPositionToServer()
         end
     elseif MasterClient == "c" then
-        -- A timeout has just occurred
+        -- If I was previously connected, I have just timed out.
         OnTimeout()
+    elseif ReconnectTimer > 0 then
+        -- Waiting to reconnect
+        ReconnectTimer = ReconnectTimer - DeltaTime
     else
-        -- Offline
-        if ReconnectTimer > 0 then
-            ReconnectTimer = ReconnectTimer - DeltaTime
-        else
-            ReconnectTimer = SecondsBetweenReconnects
-            connectToServer()
-        end
+        -- Connecting
+        ReconnectTimer = SecondsBetweenReconnects
+        ConnectToServer()
     end
 
     if ConsoleUpdateTimer > 0 then
@@ -2946,7 +2908,7 @@ local function onFrameCompleted()
                 Loadscript(20)
             end
         end
-        --				SendData("RBAT")
+        --				SendToPlayer("RBAT")
 
         --Wait until other player accepts trade
     elseif LockFromScript == 5 then
@@ -2964,14 +2926,14 @@ local function onFrameCompleted()
                 Loadscript(21)
             end
         end
-        --				SendData("RTRA")
+        --				SendToPlayer("RTRA")
 
         --Show card. Placeholder for now
     elseif LockFromScript == 6 then
         if Var8000[2] ~= 0 then
             --		ConsoleForText:print("Var 8001: " .. Var8000[2])
             LockFromScript = 0
-            --	then SendData("RTRA")
+            --	then SendToPlayer("RTRA")
         end
 
         --Exit message
@@ -2996,8 +2958,8 @@ local function onFrameCompleted()
         --	if Var8000[2] ~= 0 then ConsoleForText:print("Var8001: " .. Var8000[2]) end
         if Var8000[2] == 2 then
             if OtherPlayerHasCancelled == 0 then
-                SendData("RPOK")
-                SendData("SBAT")
+                RequestRawPokemonData()
+                SendToPlayer("SBAT")
                 LockFromScript = 8
                 Loadscript(13)
             else
@@ -3007,7 +2969,7 @@ local function onFrameCompleted()
             end
         elseif Var8000[2] == 1 then
             LockFromScript = 0
-            SendData("DBAT")
+            SendToPlayer("DBAT")
             Keypressholding = 1
         end
 
@@ -3017,8 +2979,8 @@ local function onFrameCompleted()
         --If accept, then send that you accept
         if Var8000[2] == 2 then
             if OtherPlayerHasCancelled == 0 then
-                SendData("RPOK")
-                SendData("STRA")
+                RequestRawPokemonData()
+                SendToPlayer("STRA")
                 LockFromScript = 9
             else
                 OtherPlayerHasCancelled = 0
@@ -3027,7 +2989,7 @@ local function onFrameCompleted()
             end
         elseif Var8000[2] == 1 then
             LockFromScript = 0
-            SendData("DTRA")
+            SendToPlayer("DTRA")
             Keypressholding = 1
         end
     end
