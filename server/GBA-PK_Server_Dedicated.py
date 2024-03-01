@@ -12,6 +12,7 @@ ping_time = int(os.environ.get('PING_TIME', '5'))
 missed_pongs = int(os.environ.get('MAX_MISSED_PONGS', '2'))
 supported_games = os.environ.get('SUPPORTED_GAMES', 'BPR1, BPR2, BPG1, BPG2')
 max_players = int(os.environ.get('MAX_PLAYERS', '5'))
+port = int(os.environ.get('PORT', '4096'))
 
 server_nick = server_nick + ' '*(8-len(server_nick))
 
@@ -59,7 +60,6 @@ DIRECTION_NORTH = '3'
 DIRECTION_SOUTH = '4'
 
 # Misc Constants
-PORT      = 4096
 KEY_WALKABLE     = 'walkable'
 KEY_NOT_WALKABLE = 'not walkable'
 
@@ -382,8 +382,8 @@ def start_server():
 
     ss = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     host = '0.0.0.0'
-    logger.warning('Binding to port {}:{}'.format(host, PORT))
-    ss.bind((host, PORT))
+    logger.warning('Binding to port {}:{}'.format(host, port))
+    ss.bind((host, port))
     ss.listen(1)
     try:
         logger.warning('Listening for connections...')

@@ -77,7 +77,7 @@ This iteration is meant to be backwards compatible with the existing script.
 - [x] Prevent one client reconnecting repeatedly from filling up all the slots.
   - If a client stops responding to `GPOS` messages, they are kicked.
 - [x] Send messages to single clients, so they stop timing out.
-- [x] Server sends `DENY` messages and a reason to the client if it couldn't.
+- [x] Server sends `DENY` messages and a reason to the client if it couldn't join.
   - [x] The nickname is already taken.
   - [x] The server is full.
   - [x] Client version is not supported.
@@ -194,7 +194,7 @@ These are all "nice-to-haves" that I didn't consider to be a priority, and I wor
   - See [Animation and Interpolation](#Animation-and-Interpolation)
   - Partially fixed by not snapping to new position after only moving one tile.
 - [ ] Implement battles
-- [ ] Cache addresses on load rather than checking the game version frequently
+- [x] Cache addresses on load rather than checking the game version frequently
 - [ ] The server is aware of map adjacency and offsets, properly allowing cross-map visibility.
   - This is _kind of_ implemented. Solution needs work.
 - [ ] Ability to "Follow" other players, like Runescape (?)
@@ -325,6 +325,10 @@ Contains the reason why in the payload. The socket is closed afterward.
 **SPOS** - Sent by the client periodically to report its position to the server.
 Contains info such as MapID, position, facing, animation, gender, etc.
 Everything that is needed by another client to render this one.
+
+**EXIT** - Sent by the server to tell a client it should stop tracking another.
+This happens when they disconnect or when somebody moves to a different area that the server
+doesn't think they can be seen from.
 
 **GPOS** - Sent first by the server to request the position of the client.
 The client responds immediately with another `GPOS`.
