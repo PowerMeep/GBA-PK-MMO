@@ -109,7 +109,7 @@ local PreviousSecondsSinceStart = 0
 --- Used to convert a frame-based update cycle into a realtime one.
 local DeltaTime = 0
 --- Copy of the Nickname that has been formatted for sending in packets.
-local FormattedNickname = ""
+local Nickname = ""
 
 -- NETWORKING
 --- The socket used for communications with the server.
@@ -121,9 +121,10 @@ local LastSposPayload = ""
 local NumSposToSquelch = 120
 --- How many identical position packets have been skipped.
 local SposSquelchCounter = 0
---- ??? A flag for the current connection status?
---- Initially set to "a", updates to "c" after connecting.
---- Servers may have theirs set to "h".
+--- A flag for the current connection status
+--- - a = not connected
+--- - c = connected as client
+--- - h = connected as host (not applicable)
 local MasterClient = "a"
 --- The error the server reported to us when we tried to connect
 local ErrorMessage = ""
@@ -315,7 +316,7 @@ local function UpdateConsole()
     end
 
     ConsoleForText:clear()
-    SetLine(0, "Nickname: " .. FormattedNickname)
+    SetLine(0, "Nickname: " .. Nickname)
     SetLine(1, "Game: " .. GameName)
     SetLine(2, "Connection: " .. Config.Host .. ":" .. Config.Port)
 
@@ -337,6 +338,33 @@ local function UpdateConsole()
 end
 
 -- PACKET SENDING ------------------------------------------------------------------------------------------------------
+-- The network packets are currently serialized as a 64 character string.
+-- While it might be nice to use a more flexible format, like JSON, I think we can still squeeze some more efficiency out
+-- of these. Here are some possible iterations.
+--
+-- V1 (Original)
+-- [4 byte GameID][4 byte Nickname][4 byte SenderID][4 byte RecipientID][4 byte PacketType][43 byte Payload][U]
+--
+-- V2 (Current)
+-- [8 byte SenderID][8 byte RecpientID][4 byte PacketType][43 byte Payload][U]
+-- By sending GameID only when joining the game, and by consolidating the nickname and numeric ids into
+-- a single field, we can repurpose the first 16 bytes into clean 8 byte sender and recipient IDs. The rest of the packet
+-- remains the same, thus most of the parsing code is left alone.
+--
+-- V3
+-- [8 byte SenderID][4 byte PacketType][51 byte Payload][U]
+-- The vast majority of the packets being sent won't _have_ an intended recipient.
+-- The bytes reserved for that would be unused. This approach makes the recipientID part of the payload,
+-- so only packets that _need_ a recipient need to define one. The other packets are free to send more data in the payload.
+--
+-- V4
+-- [8 byte SenderID][4 byte PacketType][52 byte Payload]
+-- I'm not really sure how often malformed packets show up.
+-- If we become confident that we are no longer receiving bad packets, or we have a way to detect / handle them
+-- without checking that the 64th character is `U`, then that byte can also be lumped into the payload for a clean 52 bytes.
+-- A possible approach would be to verify that the PacketType is recognized. There is a chance for a false positive there,
+-- but it's pretty low.
+
 local function _SendData(PacketType, Recipient, Payload)
     -- If we didn't get a payload at all, initialize to empty string
     if Payload == nil then Payload = "" end
@@ -351,7 +379,7 @@ local function _SendData(PacketType, Recipient, Payload)
     if PayloadLen > 43 then
         console:log("Error - tried to send a " .. PacketType .. " packet that was too long")
     else
-        local packet = FormattedNickname .. Recipient .. PacketType .. Payload .. "U"
+        local packet = Nickname .. Recipient .. PacketType .. Payload .. "U"
         SocketMain:send(packet)
     end
 end
@@ -1484,6 +1512,13 @@ end
 
 --- Uses the player's currently playing animation to extrapolate position.
 --- Assumes the next position is 1 tile (16px) away.
+---
+--- The current implementation seems to iterate an animation frame number,
+--- and then update the `animation` position by a hardcoded amount on specific frames within the animation.
+--- When the `animation` position is a full tile from zero (>15, <-15), the position is updated by one tile in that direction.
+---
+--- Ultimately, a more general time-based interpolation might be more suitable and handle varying framerates a little better.
+--- We know how much time elapses between packets, so all we need to do is interpolate from one packet's position to the next.
 local function AnimatePlayerMovement(player)
     -- TODO: optimization: Don't lerp sprites that are completely offscreen. Just update them directly.
 
@@ -2635,7 +2670,7 @@ local function OnDataReceived()
             elseif reason == DENY_SERVER_FULL then
                 ErrorMessage = "Server is full."
             elseif reason == DENY_NAME_TAKEN then
-                ErrorMessage = "The name \"" .. FormattedNickname .. "\" is already in use."
+                ErrorMessage = "The name \"" .. Nickname .. "\" is already in use."
             elseif reason == DENY_INVALID_CHARS then
                 ErrorMessage = "Your nickname contained unsupported characters. Try picking one that only uses letters and numbers."
             elseif reason == DENY_MALFORMED_PACKET then
@@ -2667,19 +2702,19 @@ end
 --- If the nickname is greater than the target length, it will be truncated.
 local function FormatNickname()
     local nickLength = 8
-    FormattedNickname = Trim(Config.Nickname)
-    if FormattedNickname == nil or string.len(FormattedNickname) == 0 then
+    Nickname = Trim(Config.Name)
+    if Nickname == nil or string.len(Nickname) == 0 then
         console:log("Nickname not set, generating a random one. You can set this in the client script.")
         local res = ""
         for _ = 1, nickLength do
             res = res .. string.char(math.random(97, 122))
         end
-        FormattedNickname = res
+        Nickname = res
     else
-        if string.len(FormattedNickname) < nickLength then
-            FormattedNickname = Rightpad(FormattedNickname, nickLength)
-        elseif string.len(FormattedNickname) > nickLength then
-            FormattedNickname = string.sub(FormattedNickname, 1, nickLength)
+        if string.len(Nickname) < nickLength then
+            Nickname = Rightpad(Nickname, nickLength)
+        elseif string.len(Nickname) > nickLength then
+            Nickname = string.sub(Nickname, 1, nickLength)
         end
     end
 end

@@ -22,45 +22,87 @@ This may be preferable to you if you:
 - hate yourself.
 
 
-## Project Layout
+## The Client
+The client is composed of a config file, the main file, and another file housing a bunch of magic numbers.
 
-### Server
+### How to Play
+Same as the original.
+1. Get [mGBA](https://mgba.io) version 0.10.0 or higher.
+2. Put the client scripts in mGBA's `scripts` folder.
+3. Edit the `Config.lua` (See [Configuration](#Configuration))
+4. Run mGBA.
+5. Load the script.
+6. Open your legally ripped ROM file.
+
+### Configuration
+Each player will need to edit the Config file and change a few things.
+
+#### Name
+The name you want to have when you connect. If you don't set it, you'll get a random one. Maximum 8 characters.
+
+#### Host
+The host to connect to. Supports IPv4 and URLs.
+
+#### Port
+The port on the host to connect to.
+
+#### MaxRenderedPlayers
+If there are more players nearby than this number, then they'll just stay invisible until somebody leaves your line of sight. No big deal.
+However, for each extra player the script has to draw, it needs a little more of the GBA's memory.
+The original script supported 4, I've done a few tests with 8, and I saw a comment that suggests it might be able to go as high as 32.
+If the number of onscreen players is too high, it'll start to overwrite other important things in the GBA's memory, and that's generally undesirable.
+
+TLDR: The higher the number, the more likely something is to go wrong.
+
+
+## The Server
 This is a dedicated server for the project, written in Python because I'm a lot more
 comfortable with that language. It listens for connections and distributes messages between players.
 
 It also attempts to understand the layout of the world and only make each player aware of the others they
-might actually be able to _see,_ but there is a caveat to the current approach. See [Maps and Adjacency](#maps-and-adjacency)
+might actually be able to _see,_ but there is a caveat to the current approach.
+If you're interested, I wrote about it in [the server file.](server/GBA-PK_Server_Dedicated.py)
 
-### Client
-The client is composed of a main file, and another file housing all the sprite data.
-
-Each player will need to edit the Config file and change a few things.
-- Nickname
-- Host
-- Port
-
-And if they're feeling especially brave, feel free to also mess with `MaxRenderedPlayers`. It controls how many other players
-the script will try to draw on your screen at the same time. If there are more, it'll just stop trying after this number, leaving the others invisible.
-The original script supported 4, I've done a few tests with 8, and I saw a comment that suggests it might be able to go as high as 32.
-Be aware that at some point, writing sprite data into memory may overwrite something else and cause memory corruption, and that's generally undesirable.
-
-
-## Setup
-
-### Server
-1. Set ENVs or whatever
+### Running
+1. Edit environment variables (See [Environment Variables](#Environment-Variables))
 2. Run the server script somewhere you can reach it with TCP traffic.
 3. Dockerfile included!
 
+### Environment Variables
 
-### Client
-Same as the original.
-1. Get [mGBA](https://mgba.io) version 0.10.0 or higher.
-2. Put the client scripts in mGBA's `scripts` folder.
-3. Edit the `Config.lua` to point to where the server is, as well as add your desired nickname (up to 8 characters).
-4. Run mGBA.
-5. Load the script.
-6. Open your legally ripped ROM file.
+#### LOGGING_LEVEL
+Just a nice way to set the verbosity of logging.
+
+#### SERVER_NAME
+The name of this server as it should appear to players. Max 8 characters.
+
+#### PING_TIME
+How long, in seconds, between pings sent to the client.
+
+#### MAX_MISSED_PONGS
+How many times a client can not respond to a PING before they are timed out.
+
+#### SUPPORTED_GAMES
+A comma-separated list of the game ids that are supported.
+It's probably a good idea to keep games with different maps separate from one another.
+
+| GameID | Version        |
+|--------|----------------|
+| BPR1   |  FireRed v1.0  |
+| BPR2   | FireRed v1.1   |
+| BPG1   | LeafGreen v1.0 |
+| BPG2   | LeafGreen v1.1 |
+| AXVE   | Ruby           |
+| AXPE   | Sapphire       |
+| BPEE   | Emerald        |
+
+#### MAX_PLAYERS
+How many players to allow in at a time. I haven't tested how high this can be.
+I was able to do decently with 9 in tests, but at some point, there will be issues with
+how many players the server can actually respond to at a time.
+
+#### PORT
+Sets the port to listen on.
 
 
 ## Roadmap
@@ -122,6 +164,7 @@ This iteration will break backwards compatibility in favor of efficiency and sca
 ### Milestone 3: Restructured Client
 I have a plan for how I want to rebuild the client that I think will make it a lot more reusable, both for GBA Pokemon games and possibly _other_ GBA games.
 I haven't come up with a detailed TODO list for this refactoring effort, though. The script is broken into three layers - Generic Client, Pokemon Logic, Magic Numbers.
+
 #### Generic Client
 This layer will house all the client stuff - Nickname, IP address, connection to server, pings and pongs - anything that would be true for any networked game.
 
@@ -138,7 +181,7 @@ I want to pull all these numbers into separate modules that either expose the nu
 The idea here is that the logic layer will identify which game is loaded, and then load the corresponding module it needs to communicate with that cartridge data.
 As of this commit, I've only gotten as far as extracting the FR/LG sprite data.
 
-I think setting it up this way will make it a lot easier for contributers to add game modules for the games they want to see supported by this.
+I think setting it up this way will make it a lot easier for contributors to add game modules for the games they want to see supported by this.
 
 ### Miscellaneous / Polish
 These are all "nice-to-haves" that I didn't consider to be a priority, and I worked on them when it made sense to.
@@ -191,8 +234,8 @@ These are all "nice-to-haves" that I didn't consider to be a priority, and I wor
   - Malformed `POKE` packet?
 - [ ] Fix players in a neighboring map to the north being drawn one tile too low
 - [ ] Smooth the animation on the rendered players
-  - See [Animation and Interpolation](#Animation-and-Interpolation)
   - Partially fixed by not snapping to new position after only moving one tile.
+  - Notes in the animation method in [the client script](client/GBA-PK_Client.lua)
 - [ ] Implement battles
 - [x] Cache addresses on load rather than checking the game version frequently
 - [ ] The server is aware of map adjacency and offsets, properly allowing cross-map visibility.
@@ -206,82 +249,3 @@ These are all "nice-to-haves" that I didn't consider to be a priority, and I wor
 - [ ] Hide and seek (?)
   - Seems to be partially implemented already
 - [ ] Double battles (??)
-
-
-## Notes and Ramblings
-
-### Animation and Interpolation
-The current implementation seems to iterate an animation frame number, 
-and then update the `animation` position by a hardcoded amount on specific frames within the animation.
-When the `animation` position is a full tile from zero (>15, <-15), the position is updated by one tile in that direction.
-
-Ultimately, a more general time-based interpolation might be more suitable and handle varying framerates a little better.
-We know how much time elapses between packets, so all we need to do is interpolate from one packet's position to the next.
-
-### Maps and Adjacency
-The current implementation tracks the current and previous maps for each player,
-and renders players that share one of them. This can lead to some wonky results.
-
-For networking efficiency reasons, I'd like to track the room a player is in server-side and only
- send position updates to players in the same room.
-
-**Actually** - Here's an idea for how the current system could be built upon:
-When a player crosses a map border, we know:
-- the previous coordinate on the previous map
-- the current coordinate on the current map
-- the map transition type (to determine whether these maps are visible from one another)
-
-This can be used to recognize that a pair of maps are visible from one another as well as their offsets.
-**SO WHAT IF** this data is **cached** and an internal map of adjacent areas and offsets is stored?
-It could also be stored on the filesystem and reloaded next run.
-
-**WARNING** - The MapEntranceType field is not reliable. It is always set to 0 when walking into a new map,
-but it is not always set to 1 when walking through a door. As a workaround, I've implemented a non-walkable map.
-If an area is known to be non-walkable, then it won't be marked as walkable. Inversely, if a transition was previously
-marked as walkable, presumably erroneously, then a non-walkable transition will remove that.
-- Walking to new map. Flag always set to 0.
-- Entering a building. Flag set to 1 _after_ the first time.
-- Fainting teleports you inside Pokemon Center. Flag not set to 1.
-- Using "Fly" - Teleports you outside a Pokemon Center. Flag set to 1.
-- Using "Teleport" - ??? Probably inside Pokemon Center?
-
-### Client-side socket management
-The client tracks its connection status through two means. This could be reduced to one.
-- The current value of `MasterClient`
-  - "a" = not connected
-  - "c" = connected as client
-  - "h" = connected as host (not applicable to this implementation.)
-- The current value of the timeout timer
-  - a value greater than 0 indicates that we may still be connected
-  - a value of 0 or less indicates that we have timed out
-
-### Packet format
-The network packets are currently serialized as a 64 character string. 
-While it might be nice to use a more flexible format, like JSON, I think we can still squeeze some more efficiency out
-of these. Here are some possible iterations.
-
-#### V1 (Original)
-`[4 byte GameID][4 byte Nickname][4 byte SenderID][4 byte RecipientID][4 byte PacketType][43 byte Payload][U]`
-
-#### V2 (Current)
-`[8 byte SenderID][8 byte RecpientID][4 byte PacketType][43 byte Payload][U]`
-
-By sending GameID only when joining the game, and by consolidating the nickname and numeric ids into
-a single field, we can repurpose the first 16 bytes into clean 8 byte sender and recipient IDs. The rest of the packet
-remains the same, thus most of the parsing code is left alone.
-
-#### V3
-`[8 byte SenderID][4 byte PacketType][51 byte Payload][U]`
-
-The vast majority of the packets being sent won't _have_ an intended recipient.
-The bytes reserved for that would be unused. This approach makes the recipientID part of the payload, 
-so only packets that _need_ a recipient need to define one. The other packets are free to send more data in the payload.
-
-#### V4
-`[8 byte SenderID][4 byte PacketType][52 byte Payload]`
-
-I'm not really sure how often malformed packets show up.
-If we become confident that we are no longer receiving bad packets, or we have a way to detect / handle them
-without checking that the 64th character is `U`, then that byte can also be lumped into the payload for a clean 52 bytes.
-A possible approach would be to verify that the PacketType is recognized. There is a chance for a false positive there,
-but it's pretty low.

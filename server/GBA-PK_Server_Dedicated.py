@@ -11,7 +11,7 @@ server_nick = os.environ.get('SERVER_NAME', 'servname')[:8]
 ping_time = int(os.environ.get('PING_TIME', '5'))
 missed_pongs = int(os.environ.get('MAX_MISSED_PONGS', '2'))
 supported_games = os.environ.get('SUPPORTED_GAMES', 'BPR1, BPR2, BPG1, BPG2')
-max_players = int(os.environ.get('MAX_PLAYERS', '5'))
+max_players = int(os.environ.get('MAX_PLAYERS', '9'))
 port = int(os.environ.get('PORT', '4096'))
 
 server_nick = server_nick + ' '*(8-len(server_nick))
@@ -76,11 +76,15 @@ def add_possible_adjacency(map_id, prev_map_id, entrance_type):
     Attempts to mark two maps as adjacent AND visible to one another.
     Used for determining which players might be able to see one another.
 
-    The `entrance_type` flag is not reliably set at this time and may be set to WALKABLE incorrectly.
-    To mitigate this, a previously WALKABLE transition may be marked as UNWALKABLE by a future packet.
-
-    HOWEVER, there is a bug here related to teleporting, which cause CORRECTLY marked areas to be
-    marked as permanently unwalkable until the next server reboot.
+    The entrance_type field is not reliable. It is always set to 0 when walking into a new map,
+    but it is not always set to 1 when walking through a door. As a workaround, I've implemented a non-walkable map.
+    If an area is known to be non-walkable, then it won't be marked as walkable. Inversely, if a transition was previously
+    marked as walkable, presumably erroneously, then a non-walkable transition will remove that.
+    - Walking to new map. Flag always set to 0.
+    - Entering a building. Flag set to 1 _after_ the first time.
+    - Fainting teleports you inside Pokemon Center. Flag not set to 1.
+    - Using "Fly" - Teleports you outside a Pokemon Center. Flag set to 1.
+    - Using "Teleport" - ??? Probably inside Pokemon Center?
 
     :param map_id: The map a player is currently on.
     :param prev_map_id: The map the player was previously on.

@@ -5,7 +5,7 @@ local Host = "127.0.0.1"
 local Port = 4096
 
 --- Screen name. Max 8 characters.
-local Nickname = ""
+local Name = ""
 
 --- Maximum number of remote players that can be drawn at once.
 --- This does NOT affect how many people can be in your game at once or even nearby.
@@ -20,6 +20,6 @@ local MaxRenderedPlayers = 8
 local mod = {}
 mod.Host = Host
 mod.Port = Port
-mod.Nickname = Nickname
+mod.Name = Name
 mod.MaxRenderedPlayers = MaxRenderedPlayers
 return mod
