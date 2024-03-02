@@ -18,32 +18,93 @@ local MaxRenderedPlayers = 8
 -- This version of the client script is not compatible with the original server script anymore. ------------------------
 local FRLG = require(".FireRed_LeafGreen")
 
-
 -- CONSTANTS
 --- Version number for this client script. Used to track compatibility with the server.
-local ClientVersionNumber = 1016
---- The console used for displaying current status.
-local ConsoleForText
---- Flip the gender of remote players.
---- Used for debugging sprites.
-local DebugGenderSwitch = false
+local CLIENT_VERSION_NUMBER = 1016
+--- Flip the gender of remote players. Used for debugging sprites.
+local DEBUG_GENDER_SWITCH = false
 --- Maximum time to wait for a packet from the server before timing out.
-local SecondsUntilTimeout = 10
+local SECONDS_UNTIL_TIMEOUT = 10
 --- The number of seconds in between each reconnect attempt
-local SecondsBetweenReconnects = 10
+local SECONDS_BETWEEN_RECONNECTS = 10
 --- The number of seconds between sending position updates to the server
-local SecondsBetweenPositionUpdates = .1
+local SECONDS_BETWEEN_POSITION_UPDATES = .1
 --- The number of seconds between updating the console
-local SecondsBetweenConsoleUpdates = 1
+local SECONDS_BETWEEN_CONSOLE_UPDATES = 1
 
+--- Sent by the client when requesting to join a server.
+--- Contains a requested nickname, client version, and loaded gameID.
+local PACKET_JOIN_SERVER        = "JOIN"
+--- Sent by the server if the client's `JOIN` was denied.
+--- Contains the reason why in the payload. The socket is closed afterward.
+local PACKET_SERVER_DENY        = "DENY"
+--- Sent by the server if the client's `JOIN` was accepted.
+--- Contains an ID for the client to identify itself with.
+local PACKET_SERVER_START       = "STRT"
+--- Sent by the client periodically to report its position to the server.
+--- Contains info such as MapID, position, facing, animation, gender, etc.
+--- Everything that is needed by another client to render this one.
+local PACKET_PLAYER_UPDATE      = "SPOS"
+--- Sent by the server to tell a client it should stop tracking another.
+--- This happens when they disconnect or when somebody moves to a different area that the server
+--- doesn't think they can be seen from.
+local PACKET_PLAYER_EXIT        = "EXIT"
+--- Sent by the server to check if a client is still there.
+--- If it is, the client should respond with a `PONG`
+local PACKET_PING               = "GPOS"
+--- Sent by the client in response to a `PING`.
+local PACKET_PONG               = "GPOS"
+--- Sent by the client to request the Pokemon of another.
+--- A client receiving this will respond with a series of 6 `POKE` packets.
+local PACKET_REQUEST_POKEMON    = "RPOK"
+--- Sent by the client in response to an `RPOK`.
+--- Contains the player's party of Pokemon.
+local PACKET_RAW_POKEMON_DATA   = "POKE"
+--- Sent by the client who is too busy to respond to another player's request.
+--- This can happen in response to Trade requests and Battle requests
+local PACKET_TOO_BUSY           = "TBUS"
+--- Sent by the client to request to trade with another.
+local PACKET_REQUEST_TRADE      = "RTRA"
+--- Sent by the client to accept the trade.
+local PACKET_DECLINE_TRADE      = "DTRA"
+--- Sent by the client to decline the trade.
+local PACKET_ACCEPT_TRADE       = "STRA"
+--- Sent by the client, containing raw trade payloads.
+local PACKET_RAW_TRADE_DATA     = "TRAD"
+--- Sent by the client to cancel a previously accepted trade.
+local PACKET_CANCEL_TRADE       = "CTRA"
+--- Sent by the client if they refuse a trade offer.
+local PACKET_REFUSE_TRADE_OFFER = "ROFF"
+--- Sent by the client, challenging another to battle.
+local PACKET_REQUEST_BATTLE     = "RBAT"
+--- Sent by the client, declining the challenge.
+local PACKET_DECLINE_BATTLE     = "DBAT"
+--- Sent by the client, accepting the challenge.
+local PACKET_ACCEPT_BATTLE      = "SBAT"
+--- Sent by the client, containing raw battle data.
+local PACKET_RAW_BATTLE_DATA    = "BATT"
+--- Sent by the client, canceling a previously accepted battle.
+local PACKET_CANCEL_BATTLE      = "CBAT"
+--- Sent by clients to one another.
+--- I believe this is for forwarding raw Link Cable communications.
+local PACKET_RAW_LINK_DATA      = "SLNK"
 
--- TODO: packet type constants
+--- The player was denied because the server is at its configured capacity.
+local DENY_SERVER_FULL          = "FULL"
+--- The player was denied because somebody else in the server is using the same name.
+local DENY_NAME_TAKEN           = "NAME"
+--- The player was denied because their name had invalid characters in it.
+local DENY_INVALID_CHARS        = "CHRS"
+--- The player was denied because their `JOIN` packet wasn't understood.
+local DENY_MALFORMED_PACKET     = "MALF"
 
 -- SESSION VARIABLES
+--- The console used for displaying current status.
+local ConsoleForText
 --- The name of the server we connected to.
 local ServerName = "None"
 --- The currently loaded rom.
-local ROMCARD
+local RomCard
 --- The short code representation of the game.
 local GameID = ""
 --- The full name of the identified game.
@@ -91,11 +152,11 @@ local UpdatePositionTimer = 0
 local ConsoleUpdateTimer = 0
 
 -- MULTIPLAYER VARS
---- Long form numeric ID of the player talking to us.
-local PlayerTalkingID2 = "00000000"
+--- The Nickname of the player we're talking to
+local TargetPlayer = "00000000"
 --- Collection of render addresses to use for remote players.
 --- Initialized on game start.
-local renderers = {}
+local Renderers = {}
 
 -- LOCAL PLAYER VARS
 local CameraX = 0
@@ -170,9 +231,9 @@ local EnemyPokemon = { "", "", "", "", "", "" }
 local MultichoiceAdr = 0
 local BikeOffset = 0
 
-local playerProxies = {}
-local function newPlayerProxy()
-    local proxy = {
+local PlayerProxies = {}
+local function NewPlayerProxy()
+    local Proxy = {
         AnimationX=0,
         AnimationY=0,
         FutureX=0,
@@ -226,7 +287,7 @@ local function newPlayerProxy()
         AnimateID=0
     }
 
-    return proxy
+    return Proxy
 end
 
 
@@ -234,7 +295,7 @@ end
 
 --- Trim the whitespace before and after a sting.
 --- If the input is nil, this returns nil.
-local function trim(s)
+local function Trim(s)
     if s == nil then
         return nil
     end
@@ -243,7 +304,7 @@ end
 
 --- Adds spaces on the right until the string is the target length.
 --- If the string is longer than the target length, it is returned unchanged.
-local function rightpad(s, targetLength)
+local function Rightpad(s, targetLength)
     if string.len(s) > targetLength then
         return s
     end
@@ -255,7 +316,7 @@ end
 
 
 --- Sets the given line to display the given text in the console.
-local function setLine(line, text)
+local function SetLine(line, text)
     if ConsoleForText ~= nil then
         ConsoleForText:moveCursor(0, line)
         ConsoleForText:print(text)
@@ -263,29 +324,29 @@ local function setLine(line, text)
 end
 
 --- Updates the full console with the current client state.
-local function updateConsole()
+local function UpdateConsole()
     if ConsoleForText == nil then
         return
     end
 
     ConsoleForText:clear()
-    setLine(0, "Nickname: " .. Nickname)
-    setLine(1, "Game: " .. GameName)
-    setLine(2, "Connection: " .. IPAddress .. ":" .. Port)
+    SetLine(0, "Nickname: " .. Nickname)
+    SetLine(1, "Game: " .. GameName)
+    SetLine(2, "Connection: " .. IPAddress .. ":" .. Port)
 
     if MasterClient == "c" then
-        setLine(3, "Server Name: " .. ServerName)
-        setLine(4, "Nearby Players:")
+        SetLine(3, "Server Name: " .. ServerName)
+        SetLine(4, "Nearby Players:")
         -- List of nearby players
         local line = 5
-        for nick, _ in pairs(playerProxies) do
-            setLine(line, nick)
+        for nick, _ in pairs(PlayerProxies) do
+            SetLine(line, nick)
             line = line + 1
         end
     else
-        setLine(3, "Not Connected.")
+        SetLine(3, "Not Connected.")
         if ErrorMessage and string.len(ErrorMessage) > 0 then
-            setLine(4, "Error Message: " .. ErrorMessage)
+            SetLine(4, "Error Message: " .. ErrorMessage)
         end
     end
 end
@@ -315,7 +376,7 @@ local function SendToServer(PacketType, Payload)
 end
 
 local function SendToPlayer(PacketType, Payload)
-    _SendData(PacketType, PlayerTalkingID2, Payload)
+    _SendData(PacketType, TargetPlayer, Payload)
 end
 
 local function SendPositionToServer()
@@ -341,10 +402,10 @@ local function SendPositionToServer()
     if (Payload == LastSposPayload) and SposSquelchCounter < NumSposToSquelch then
         SposSquelchCounter = SposSquelchCounter + 1
     else
-        UpdatePositionTimer = UpdatePositionTimer + SecondsBetweenPositionUpdates
+        UpdatePositionTimer = UpdatePositionTimer + SECONDS_BETWEEN_POSITION_UPDATES
         SposSquelchCounter = 0
         LastSposPayload = Payload
-        SendToServer("SPOS", Payload)
+        SendToServer(PACKET_PLAYER_UPDATE, Payload)
     end
 end
 
@@ -352,7 +413,7 @@ local function RequestRawPokemonData()
     for i = 1, 6 do
         EnemyPokemon[i] = ""
     end
-    SendToPlayer("RPOK")
+    SendToPlayer(PACKET_REQUEST_POKEMON)
 end
 
 local function SendRawPokemonData()
@@ -364,17 +425,17 @@ local function SendRawPokemonData()
             StartNum = ((i - 1) * 25) + 1
             StartNum2 = StartNum + 24
             PokeTemp = string.sub(Pokemon[j], StartNum, StartNum2)
-            SendToPlayer("POKE", PokeTemp)
+            SendToPlayer(PACKET_RAW_POKEMON_DATA, PokeTemp)
         end
     end
 end
 
 local function SendRawTradeData()
-    SendToPlayer("TRAD", TradeVars[1] .. TradeVars[2] .. TradeVars[3] .. TradeVars[5])
+    SendToPlayer(PACKET_RAW_TRADE_DATA, TradeVars[1] .. TradeVars[2] .. TradeVars[3] .. TradeVars[5])
 end
 
 local function SendRawBattleData()
-    SendToPlayer("BATT", BattleVars[1] .. BattleVars[2] .. BattleVars[3] .. BattleVars[4] .. BattleVars[5] .. BattleVars[6] .. BattleVars[7] .. BattleVars[8] .. BattleVars[9] .. BattleVars[10])
+    SendToPlayer(PACKET_RAW_BATTLE_DATA, BattleVars[1] .. BattleVars[2] .. BattleVars[3] .. BattleVars[4] .. BattleVars[5] .. BattleVars[6] .. BattleVars[7] .. BattleVars[8] .. BattleVars[9] .. BattleVars[10])
 end
 
 local function SendRawLinkData(size)
@@ -382,7 +443,7 @@ local function SendRawLinkData(size)
     local SizeAct = size + 1000000000
     --		SizeAct = tostring(SizeAct)
     --		SizeAct = string.format("%.0f",SizeAct)
-    SendToPlayer("SLNK", SizeAct)
+    SendToPlayer(PACKET_RAW_LINK_DATA, SizeAct)
 end
 
 
@@ -499,7 +560,7 @@ end
 
 --- Given an array of 32-bit integers and a start address, write each integer to the subsequent address.
 --- Assumes the input is an integer-indexed table, starting with 1, and contains no nil values.
-local function writeIntegerArrayToRom(startAddress, array)
+local function WriteIntegerArrayToRom(startAddress, array)
     local i = 0
     local val = 0
     while true do
@@ -507,14 +568,14 @@ local function writeIntegerArrayToRom(startAddress, array)
         if val == nil then
             break
         end
-        ROMCARD:write32(startAddress + i * 4, val)
+        RomCard:write32(startAddress + i * 4, val)
         i = i + 1
     end
 end
 
 --- Given an array of 32-bit integers and a start address, write each integer to the subsequent address.
 --- Assumes the input is an integer-indexed table, starting with 1, and contains no nil values.
-local function writeIntegerArrayToEmu(startAddress, array)
+local function WriteIntegerArrayToEmu(startAddress, array)
     local i = 0
     local val = 0
     while true do
@@ -533,8 +594,8 @@ end
 --- The string is terminated with a special FF character.
 ---
 --- It is used for displaying player nicknames when interacting.
-local function writeTextToAddress(text, startAddress)
-    local cleantext = trim(text)
+local function WriteTextToAddress(text, startAddress)
+    local cleantext = Trim(text)
     local num
     for i = 1, string.len(cleantext) do
         num = string.sub(cleantext, i, i)
@@ -570,7 +631,7 @@ local function NewRenderer(index)
         --- Keep this in mind if other games are eventually added.
         renderInstructionAddress=50345200 - (indexFromZero * 24)
     }
-    renderers[index] = renderer
+    Renderers[index] = renderer
 end
 --- Precalculate rendering addresses for this session.
 local function CreateRenderers()
@@ -579,7 +640,7 @@ local function CreateRenderers()
     end
 end
 
-local function writeRenderInstructionToMemory(renderer, offset, x, y, face, sprite, ex1, ex3, ex4)
+local function WriteRenderInstructionToMemory(renderer, offset, x, y, face, sprite, ex1, ex3, ex4)
     emu:write8(renderer.renderInstructionAddress  + offset,     y)
     emu:write8(renderer.renderInstructionAddress  + offset + 2, x)
     emu:write8(renderer.renderInstructionAddress  + offset + 3, face)
@@ -589,8 +650,8 @@ local function writeRenderInstructionToMemory(renderer, offset, x, y, face, spri
     emu:write8(renderer.renderInstructionAddress  + offset + 7, ex4)
 end
 
-local function eraseRenderInstructionFromMemory(renderer, offset)
-    writeRenderInstructionToMemory(
+local function EraseRenderInstructionFromMemory(renderer, offset)
+    WriteRenderInstructionToMemory(
             renderer,
             offset,
             48,
@@ -603,20 +664,20 @@ local function eraseRenderInstructionFromMemory(renderer, offset)
     )
 end
 
-local function eraseAllPlayerRenderInstructions(renderer)
+local function EraseAllPlayerRenderInstructions(renderer)
     --Base char
-    eraseRenderInstructionFromMemory(renderer, 0)
+    EraseRenderInstructionFromMemory(renderer, 0)
     --Surfing char
-    eraseRenderInstructionFromMemory(renderer, 8)
+    EraseRenderInstructionFromMemory(renderer, 8)
     --Extra Char
-    eraseRenderInstructionFromMemory(renderer, 16)
+    EraseRenderInstructionFromMemory(renderer, 16)
 end
 
-local function eraseAllRenderInstructionsIfDirty(renderer)
+local function EraseAllRenderInstructionsIfDirty(renderer)
     -- the == false is because the value might be nil
     if renderer.isDirty then
         renderer.isDirty = false
-        eraseAllPlayerRenderInstructions(renderer)
+        EraseAllPlayerRenderInstructions(renderer)
     end
 end
 
@@ -697,7 +758,7 @@ local function LoadScriptIntoMemory()
     --134654353 and 145293312 freezes the game
     local touchyAddress = 513
 
-    writeIntegerArrayToEmu(ScriptAddress, {0, 0, touchyAddress, 0, ScriptAddress2 + 1, 0, 0, 0, 0, 0, 0, 0})
+    WriteIntegerArrayToEmu(ScriptAddress, { 0, 0, touchyAddress, 0, ScriptAddress2 + 1, 0, 0, 0, 0, 0, 0, 0})
 end
 
 local function WriteBuffers(BufferOffset, BufferVar, Length)
@@ -732,84 +793,84 @@ local function Loadscript(ScriptNo)
     local Buffer3 = 33692932
 
     if ScriptNo == 0 then
-        ROMCARD:write32(ScriptAddress2, 4294902380)
+        RomCard:write32(ScriptAddress2, 4294902380)
         --		LoadScriptIntoMemory()
         --Host script
     elseif ScriptNo == 1 then
         emu:write16(Var8000Adr[2], 0)
         emu:write16(Var8000Adr[5], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {603983722, 151562240, 2148344069, 17170433, 145227804, 25166870, 4278348800, 41944086, 4278348800, 3773424593, 3823960280, 3722445033, 3892369887, 3805872355, 3655390933, 3638412030, 3034710233, 3654929664, 16755935})
+        WriteIntegerArrayToRom(ScriptAddress2, { 603983722, 151562240, 2148344069, 17170433, 145227804, 25166870, 4278348800, 41944086, 4278348800, 3773424593, 3823960280, 3722445033, 3892369887, 3805872355, 3655390933, 3638412030, 3034710233, 3654929664, 16755935})
         LoadScriptIntoMemory()
         --Interaction Menu	Multi Choice
     elseif ScriptNo == 2 then
         emu:write16(Var8000Adr[1], 0)
         emu:write16(Var8000Adr[2], 0)
         emu:write16(Var8000Adr[14], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {1664873, 1868957864, 132117, 226492441, 2147489664, 40566785, 3588018687, 3823829224, 14213353, 15328237, 3655327200, 14936318, 3942704088, 14477533, 4289463293, 4294967040})
+        WriteIntegerArrayToRom(ScriptAddress2, { 1664873, 1868957864, 132117, 226492441, 2147489664, 40566785, 3588018687, 3823829224, 14213353, 15328237, 3655327200, 14936318, 3942704088, 14477533, 4289463293, 4294967040})
 
-        writeTextToAddress(PlayerTalkingID2, Buffer2)
+        WriteTextToAddress(TargetPlayer, Buffer2)
 
         --First save multichoice in case it's needed later
-        PrevExtraAdr = ROMCARD:read32(MultichoiceAdr)
+        PrevExtraAdr = RomCard:read32(MultichoiceAdr)
         --Overwrite multichoice 0x2 with a custom at address MultichoiceAdr2
-        ROMCARD:write32(MultichoiceAdr, MultichoiceAdr2)
+        RomCard:write32(MultichoiceAdr, MultichoiceAdr2)
         --Multi-Choice
-        writeIntegerArrayToRom(MultichoiceAdr2, {
+        WriteIntegerArrayToRom(MultichoiceAdr2, {
             ScriptAddress3, 0, ScriptAddress3 + 7, 0, ScriptAddress3 + 13, 0, ScriptAddress3 + 18, 0
         })
         --Text
-        writeIntegerArrayToRom(ScriptAddress3, {3907573180, 3472873952, 3654866406, 3872767487, 3972005848, 4294961373})
+        WriteIntegerArrayToRom(ScriptAddress3, { 3907573180, 3472873952, 3654866406, 3872767487, 3972005848, 4294961373})
         LoadScriptIntoMemory()
         --Placeholder
     elseif ScriptNo == 3 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632321, 3907242239, 3689078236, 3839220736, 3655522788, 16756952, 4294967295})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632321, 3907242239, 3689078236, 3839220736, 3655522788, 16756952, 4294967295})
         LoadScriptIntoMemory()
         --Waiting message
     elseif ScriptNo == 4 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {1271658, 375785640, 5210113, 654415909, 3523150444, 3723025877, 3657489378, 3808487139, 3873037544, 3588285440, 2967919085, 4294902015})
+        WriteIntegerArrayToRom(ScriptAddress2, { 1271658, 375785640, 5210113, 654415909, 3523150444, 3723025877, 3657489378, 3808487139, 3873037544, 3588285440, 2967919085, 4294902015})
         LoadScriptIntoMemory()
         --Cancel message
     elseif ScriptNo == 5 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632325, 3655126783, 3706249984, 3825264345, 3656242656, 3587965158, 3587637479, 3772372962, 4289583321, 4294967040})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632325, 3655126783, 3706249984, 3825264345, 3656242656, 3587965158, 3587637479, 3772372962, 4289583321, 4294967040})
         LoadScriptIntoMemory()
         --Trade request
     elseif ScriptNo == 6 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {469765994, 151562240, 2148344069, 393217, 145227850, 41943318, 4278348800, 3942646781, 3655133149, 3823632615, 3588679680, 3942701528, 14477533, 2917786605, 14925566, 15328237, 3654801365, 4289521892, 18284288, 1811939712, 4294967042})
+        WriteIntegerArrayToRom(ScriptAddress2, { 469765994, 151562240, 2148344069, 393217, 145227850, 41943318, 4278348800, 3942646781, 3655133149, 3823632615, 3588679680, 3942701528, 14477533, 2917786605, 14925566, 15328237, 3654801365, 4289521892, 18284288, 1811939712, 4294967042})
         LoadScriptIntoMemory()
 
-        writeTextToAddress(PlayerTalkingID2, Buffer2)
+        WriteTextToAddress(TargetPlayer, Buffer2)
 
         --Trade request denied
     elseif ScriptNo == 7 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632321, 3655126783, 3706249984, 3825264345, 3656242656, 3822584038, 3808356313, 3942705379, 14477277, 3892372456, 3654866406, 4278255533})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632321, 3655126783, 3706249984, 3825264345, 3656242656, 3822584038, 3808356313, 3942705379, 14477277, 3892372456, 3654866406, 4278255533})
         LoadScriptIntoMemory()
         --Trade offer
     elseif ScriptNo == 8 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {469765994, 151562240, 2148344069, 393217, 145227866, 41943318, 4278348800, 15328211, 3656046044, 3671778048, 3638159065, 2902719744, 3655126782, 3587965165, 3808483818, 3873037018, 4244691161, 3522931970, 14737629, 15328237, 3654801365, 4289521892, 18284288, 1811939712, 4294967042})
+        WriteIntegerArrayToRom(ScriptAddress2, { 469765994, 151562240, 2148344069, 393217, 145227866, 41943318, 4278348800, 15328211, 3656046044, 3671778048, 3638159065, 2902719744, 3655126782, 3587965165, 3808483818, 3873037018, 4244691161, 3522931970, 14737629, 15328237, 3654801365, 4289521892, 18284288, 1811939712, 4294967042})
         LoadScriptIntoMemory()
         --Trade offer denied
     elseif ScriptNo == 9 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632321, 3655126783, 3588679680, 3691043288, 3590383573, 14866905, 3772242392, 3638158045, 4278255533})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632321, 3655126783, 3588679680, 3691043288, 3590383573, 14866905, 3772242392, 3638158045, 4278255533})
         LoadScriptIntoMemory()
         --Battle request
     elseif ScriptNo == 10 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {469765994, 151562240, 2148344069, 393217, 145227846, 41943318, 4278348800, 3942646781, 3655133149, 3823632615, 3906328064, 14278888, 2917786605, 14925566, 15328237, 3654801365, 4289521892, 18284288, 1811939712, 4294967042})
+        WriteIntegerArrayToRom(ScriptAddress2, { 469765994, 151562240, 2148344069, 393217, 145227846, 41943318, 4278348800, 3942646781, 3655133149, 3823632615, 3906328064, 14278888, 2917786605, 14925566, 15328237, 3654801365, 4289521892, 18284288, 1811939712, 4294967042})
         LoadScriptIntoMemory()
 
-        writeTextToAddress(PlayerTalkingID2, Buffer2)
+        WriteTextToAddress(TargetPlayer, Buffer2)
 
         --Battle request denied
     elseif ScriptNo == 11 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632321, 3655126783, 3706249984, 3825264345, 3656242656, 3822584038, 3808356313, 3942705379, 14477277, 3590382568, 3773360341, 16756185, 4294967295})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632321, 3655126783, 3706249984, 3825264345, 3656242656, 3822584038, 3808356313, 3942705379, 14477277, 3590382568, 3773360341, 16756185, 4294967295})
         LoadScriptIntoMemory()
         --Select Pokemon for trade
     elseif ScriptNo == 12 then
@@ -818,64 +879,64 @@ local function Loadscript(ScriptNo)
         emu:write16(Var8000Adr[4], 0)
         emu:write16(Var8000Adr[5], 0)
         emu:write16(Var8000Adr[14], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {10429802, 2147754279, 67502086, 145227809, 1199571750, 50429185, 2147554944, 40632322, 2147555071, 40632321, 4294967295})
+        WriteIntegerArrayToRom(ScriptAddress2, { 10429802, 2147754279, 67502086, 145227809, 1199571750, 50429185, 2147554944, 40632322, 2147555071, 40632321, 4294967295})
         LoadScriptIntoMemory()
         --Battle will start
     elseif ScriptNo == 13 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {1416042, 627443880, 1009254542, 2147554816, 40632322, 3924022271, 3587571942, 3655395560, 3772640000, 3823239392, 3654680811, 2917326299, 4294902015})
+        WriteIntegerArrayToRom(ScriptAddress2, { 1416042, 627443880, 1009254542, 2147554816, 40632322, 3924022271, 3587571942, 3655395560, 3772640000, 3823239392, 3654680811, 2917326299, 4294902015})
         LoadScriptIntoMemory()
         --Trade will start
     elseif ScriptNo == 14 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {1416042, 627443880, 1009254542, 2147554816, 40632322, 3924022271, 3873964262, 14276821, 3772833259, 3957580288, 3688486400, 4289585885, 4294967040})
+        WriteIntegerArrayToRom(ScriptAddress2, { 1416042, 627443880, 1009254542, 2147554816, 40632322, 3924022271, 3873964262, 14276821, 3772833259, 3957580288, 3688486400, 4289585885, 4294967040})
         LoadScriptIntoMemory()
         --You have canceled the battle
     elseif ScriptNo == 15 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632326, 3924022271, 3939884032, 3587637465, 3772372962, 14211552, 14277864, 3907573206, 4289583584, 4294967040})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632326, 3924022271, 3939884032, 3587637465, 3772372962, 14211552, 14277864, 3907573206, 4289583584, 4294967040})
         LoadScriptIntoMemory()
         --You have canceled the trade
     elseif ScriptNo == 16 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632326, 3924022271, 3939884032, 3587637465, 3772372962, 14211552, 14277864, 3637896936, 16756185, 4294967295})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632326, 3924022271, 3939884032, 3587637465, 3772372962, 14211552, 14277864, 3637896936, 16756185, 4294967295})
         LoadScriptIntoMemory()
         --Trading. Your pokemon is stored in 8004, whereas enemy pokemon is already stored through setenemypokemon command
     elseif ScriptNo == 17 then
         emu:write16(Var8000Adr[2], 0)
         emu:write16(Var8000Adr[6], Var8000[5])
-        writeIntegerArrayToRom(ScriptAddress2, {16655722, 2147554855, 40632321, 4294967295})
+        WriteIntegerArrayToRom(ScriptAddress2, { 16655722, 2147554855, 40632321, 4294967295})
         LoadScriptIntoMemory()
         --Cancel Battle
     elseif ScriptNo == 18 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632325, 3655126783, 3706249984, 3825264345, 3656242656, 3587965158, 3587637479, 3772372962, 4275624416, 14277864, 3907573206, 4289583584, 4294967040})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632325, 3655126783, 3706249984, 3825264345, 3656242656, 3587965158, 3587637479, 3772372962, 4275624416, 14277864, 3907573206, 4289583584, 4294967040})
         LoadScriptIntoMemory()
         --Cancel Trading
     elseif ScriptNo == 19 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632325, 3655126783, 3706249984, 3825264345, 3656242656, 3587965158, 3587637479, 3772372962, 4275624416, 14277864, 3637896936, 16756185, 4294967295})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632325, 3655126783, 3706249984, 3825264345, 3656242656, 3587965158, 3587637479, 3772372962, 4275624416, 14277864, 3637896936, 16756185, 4294967295})
         LoadScriptIntoMemory()
         --other player is too busy to battle.
     elseif ScriptNo == 20 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632321, 3722235647, 3873964263, 3655523797, 3655794918, 15196633, 4276347880, 3991398870, 14936064, 3907573206, 4289780192, 4294967040})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632321, 3722235647, 3873964263, 3655523797, 3655794918, 15196633, 4276347880, 3991398870, 14936064, 3907573206, 4289780192, 4294967040})
         LoadScriptIntoMemory()
         --other player is too busy to trade.
     elseif ScriptNo == 21 then
         emu:write16(Var8000Adr[2], 0)
-        writeIntegerArrayToRom(ScriptAddress2, {285216618, 151562240, 2147554822, 40632321, 3722235647, 3873964263, 3655523797, 3655794918, 15196633, 4276347880, 3991398870, 14936064, 3637896936, 16756953, 4294967295})
+        WriteIntegerArrayToRom(ScriptAddress2, { 285216618, 151562240, 2147554822, 40632321, 3722235647, 3873964263, 3655523797, 3655794918, 15196633, 4276347880, 3991398870, 14936064, 3637896936, 16756953, 4294967295})
         LoadScriptIntoMemory()
         --battle script
     elseif ScriptNo == 22 then
         emu:write16(Var8000Adr[2], 0)
-        ROMCARD:write32(ScriptAddress2, 40656234)
+        RomCard:write32(ScriptAddress2, 40656234)
         LoadScriptIntoMemory()
         --trade names script.
     elseif ScriptNo == 23 then
         --Other trainer aka other player
 
-        writeTextToAddress(PlayerTalkingID2, Buffer1)
+        WriteTextToAddress(TargetPlayer, Buffer1)
 
         --Their pokemon
         WriteBuffers(Buffer3, EnemyTradeVars[6], 5)
@@ -888,28 +949,28 @@ local function ApplyMovement(MovementType)
     local ScriptAddress2 = 145227776
     local ScriptAddressTemp = 0
     ScriptAddressTemp = ScriptAddress2
-    ROMCARD:write32(ScriptAddressTemp, 16732010)
+    RomCard:write32(ScriptAddressTemp, 16732010)
     ScriptAddressTemp = ScriptAddressTemp + 4
-    ROMCARD:write32(ScriptAddressTemp, 145227790)
+    RomCard:write32(ScriptAddressTemp, 145227790)
     ScriptAddressTemp = ScriptAddressTemp + 4
-    ROMCARD:write32(ScriptAddressTemp, 1811939409)
+    RomCard:write32(ScriptAddressTemp, 1811939409)
     ScriptAddressTemp = ScriptAddressTemp + 4
-    ROMCARD:write16(ScriptAddressTemp, 65282)
+    RomCard:write16(ScriptAddressTemp, 65282)
     if MovementType == 0 then
         ScriptAddressTemp = ScriptAddressTemp + 2
-        ROMCARD:write16(ScriptAddressTemp, 65024)
+        RomCard:write16(ScriptAddressTemp, 65024)
         LoadScriptIntoMemory()
     elseif MovementType == 1 then
         ScriptAddressTemp = ScriptAddressTemp + 2
-        ROMCARD:write16(ScriptAddressTemp, 65025)
+        RomCard:write16(ScriptAddressTemp, 65025)
         LoadScriptIntoMemory()
     elseif MovementType == 2 then
         ScriptAddressTemp = ScriptAddressTemp + 2
-        ROMCARD:write16(ScriptAddressTemp, 65026)
+        RomCard:write16(ScriptAddressTemp, 65026)
         LoadScriptIntoMemory()
     elseif MovementType == 3 then
         ScriptAddressTemp = ScriptAddressTemp + 2
-        ROMCARD:write16(ScriptAddressTemp, 65027)
+        RomCard:write16(ScriptAddressTemp, 65027)
         LoadScriptIntoMemory()
     end
 end
@@ -932,7 +993,7 @@ local function WriteRom(RomOffset, RomVar, Length)
         RomVarSeperate = string.sub(RomVar, String1, String2)
         RomVarSeperate = tonumber(RomVarSeperate)
         RomVarSeperate = RomVarSeperate - 1000000000
-        ROMCARD:write32(RomOffset2, RomVarSeperate)
+        RomCard:write32(RomOffset2, RomVarSeperate)
         RomOffset2 = RomOffset2 + 4
     end
 end
@@ -1132,7 +1193,7 @@ local function Tradescript()
         --You have canceled or have not selected a valid pokemon slot
     elseif Var8000[2] == 1 and TradeVars[1] == 1 then
         Loadscript(16)
-        SendToPlayer("CTRA")
+        SendToPlayer(PACKET_CANCEL_TRADE)
         LockFromScript = 0
         TradeVars[1] = 0
         TradeVars[2] = 0
@@ -1188,7 +1249,7 @@ local function Tradescript()
     elseif TradeVars[1] == 3 then
         --If you decline
         if Var8000[2] == 1 then
-            SendToPlayer("ROFF")
+            SendToPlayer(PACKET_REFUSE_TRADE_OFFER)
             Loadscript(16)
             LockFromScript = 7
             TradeVars[1] = 0
@@ -2190,7 +2251,7 @@ end
 
 --- Load the sprite data into memory and add an instruction to render it.
 local function RenderPlayer(player, renderer)
-    eraseAllRenderInstructionsIfDirty(renderer)
+    EraseAllRenderInstructionsIfDirty(renderer)
 
     local isBiking = 0
     local isSurfing = 0
@@ -2210,8 +2271,8 @@ local function RenderPlayer(player, renderer)
     if player.PlayerExtra1 >= 17 and player.PlayerExtra1 <= 32 then
         isBiking = 1
         FinalMapX = FinalMapX - 8
-        writeIntegerArrayToEmu(renderer.spriteDataAddress - 80, FRLG.Sprites[player.Gender][player.SpriteID1])
-        writeRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 0, renderer.spritePointerAddress, 0, 0)
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress - 80, FRLG.Sprites[player.Gender][player.SpriteID1])
+        WriteRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 0, renderer.spritePointerAddress, 0, 0)
 
     -- Surfing
     elseif player.PlayerExtra1 >= 33 and player.PlayerExtra1 <= 40 then
@@ -2220,8 +2281,8 @@ local function RenderPlayer(player, renderer)
             FinalMapY = FinalMapY + 1
         end
         --Surfing char
-        writeIntegerArrayToEmu(renderer.spriteDataAddress + 512, FRLG.Sprites[player.Gender][player.SpriteID1])
-        writeRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 128, renderer.spritePointerAddress, 0, 0)
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress + 512, FRLG.Sprites[player.Gender][player.SpriteID1])
+        WriteRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 128, renderer.spritePointerAddress, 0, 0)
 
         if player.PlayerAnimationFrame2 == 1 and player.PlayerExtra1 <= 36 then
             FinalMapY = FinalMapY - 1
@@ -2229,13 +2290,13 @@ local function RenderPlayer(player, renderer)
         FinalMapX = FinalMapX - 8
         FinalMapY = FinalMapY + 8
         --Sitting char
-        writeIntegerArrayToEmu(renderer.spriteDataAddress - 20, FRLG.Sprites[player.Gender][player.SpriteID2])
-        writeRenderInstructionToMemory(renderer,  8, FinalMapX, FinalMapY, FacingTemp, 0, renderer.spritePointerAddress + 18, 0, 0)
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress - 20, FRLG.Sprites[player.Gender][player.SpriteID2])
+        WriteRenderInstructionToMemory(renderer,  8, FinalMapX, FinalMapY, FacingTemp, 0, renderer.spritePointerAddress + 18, 0, 0)
 
     --Player default
     else
-        writeIntegerArrayToEmu(renderer.spriteDataAddress, FRLG.Sprites[player.Gender][player.SpriteID1])
-        writeRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 128, renderer.spritePointerAddress, 0, 0)
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress, FRLG.Sprites[player.Gender][player.SpriteID1])
+        WriteRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 128, renderer.spritePointerAddress, 0, 0)
     end
 
     -- Add an icon above the head if needed.
@@ -2250,8 +2311,8 @@ local function RenderPlayer(player, renderer)
             SymbolY = FinalMapY - 16
             SymbolX = FinalMapX + 8
         end
-        writeIntegerArrayToEmu(renderer.spriteDataAddress + 256 + (isBiking * 256) - 80, FRLG.Sprites[2][1])
-        writeRenderInstructionToMemory(renderer, 16, SymbolX, SymbolY, 64, 0, spritePointer, 0, 1)
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress + 256 + (isBiking * 256) - 80, FRLG.Sprites[2][1])
+        WriteRenderInstructionToMemory(renderer, 16, SymbolX, SymbolY, 64, 0, spritePointer, 0, 1)
      end
     renderer.isDirty = true
 end
@@ -2265,14 +2326,14 @@ local function DrawChars()
         local currentRendererIndex = 1
         CalculateCamera()
         -- loop over players, updating their positions and rendering them
-        for _, player in pairs(playerProxies) do
+        for _, player in pairs(PlayerProxies) do
             -- Update player position based on animation id
             AnimatePlayerMovement(player)
             -- Check whether the player is within the bounds of the camera
             UpdatePlayerVisibility(player)
             if player.PlayerVis == 1 then
                  -- Draw the sprite data
-                RenderPlayer(player, renderers[currentRendererIndex])
+                RenderPlayer(player, Renderers[currentRendererIndex])
                 player.LastRenderer = currentRendererIndex
                 currentRendererIndex = currentRendererIndex + 1
                 if currentRendererIndex > MaxRenderedPlayers then
@@ -2284,17 +2345,17 @@ local function DrawChars()
         end
         -- Clear any renderers that weren't used this frame
         for i = currentRendererIndex, MaxRenderedPlayers do
-            eraseAllRenderInstructionsIfDirty(renderers[i])
+            EraseAllRenderInstructionsIfDirty(Renderers[i])
         end
     else
         -- TODO: this probably doesn't need to be set each frame.
         for i = 1, MaxRenderedPlayers do
-            renderers[i].isDirty = true
+            Renderers[i].isDirty = true
         end
     end
 end
 
-local function onRemotePlayerUpdate(player, payload)
+local function OnRemotePlayerUpdate(player, payload)
     local x      = tonumber(string.sub(payload, 5, 8)) - 2000
     local y      = tonumber(string.sub(payload, 9, 12)) - 2000
     local facing = tonumber(string.sub(payload, 13, 15)) - 100
@@ -2325,7 +2386,7 @@ local function onRemotePlayerUpdate(player, payload)
     -- Misc data about this player
     player.PlayerExtra1 = tonumber(string.sub(payload, 16, 18)) - 100
 
-    if DebugGenderSwitch then
+    if DEBUG_GENDER_SWITCH then
         player.Gender = 1 - gender
     else
         player.Gender = gender
@@ -2355,14 +2416,14 @@ local function ClearAllVar()
     --Server Switches
     ShouldDrawRemotePlayers = 0
 
-    for key, _ in pairs(playerProxies) do
-        playerProxies[key] = nil
+    for key, _ in pairs(PlayerProxies) do
+        PlayerProxies[key] = nil
     end
 end
 
 --- Grabs the ROM metadata from mGBA and determines which game and whether it is supported.
 local function GetGameVersion()
-    ROMCARD = emu.memory.cart0
+    RomCard = emu.memory.cart0
     local GameCode = emu:getGameCode()
     if (GameCode == "AGB-BPRE") or (GameCode == "AGB-ZBDM")
     then
@@ -2428,7 +2489,7 @@ end
 --- Called when a game is started or when the script is loaded when the game was already running.
 --- Prepares the client code for the main loop.
 --- One could also say this "initializes" everything.
-local function onGameStart()
+local function OnGameStart()
     -- Clear previous values
     ClearAllVar()
     CreateRenderers()
@@ -2445,14 +2506,14 @@ end
 
 --- Called when the game is shut down via the in-game menu.
 --- Not sure if it's also called when the application is closed.
-local function onGameShutdown()
+local function OnGameShutdown()
     ClearAllVar()
     SocketMain:close()
     console:log("The game was shut down.")
 end
 
 --- Called by the socket anytime data is available to be consumed.
-local function onDataReceived()
+local function OnDataReceived()
     if not EnableScript then return end
     if not SocketMain:hasdata() then return end
 
@@ -2462,7 +2523,7 @@ local function onDataReceived()
     local theLetterU = string.sub(ReadData, 64, 64)
     if theLetterU ~= "U" then return end
 
-    TimeoutTimer = SecondsUntilTimeout
+    TimeoutTimer = SECONDS_UNTIL_TIMEOUT
 
     --- Where this packet originated from.
     local sender      = string.sub(ReadData, 1, 8)
@@ -2473,58 +2534,58 @@ local function onDataReceived()
     --- The data that was received
     local payload     = string.sub(ReadData, 21, 63)
 
-    if messageType == "SLNK" then
+    if messageType == PACKET_RAW_LINK_DATA then
         local data = tonumber(string.sub(payload, 1, 10))
         if data ~= 0 then
             ReceiveMultiplayerPackets(data - 1000000000)
         end
-    elseif messageType == "POKE" then
+    elseif messageType == PACKET_RAW_POKEMON_DATA then
         local PokeTemp2 = string.sub(payload, 1, 25)
         SetPokemonData(PokeTemp2)
-    elseif messageType == "TRAD" then
+    elseif messageType == PACKET_RAW_TRADE_DATA then
         for i = 1, 3 do
             EnemyTradeVars[i] = tonumber(string.sub(payload, i, i))
         end
         EnemyTradeVars[5] = string.sub(payload, 4, 43)
 
-    elseif messageType == "BATT" then
+    elseif messageType == PACKET_RAW_BATTLE_DATA then
         for i = 1, 10 do
             EnemyBattleVars[i] = tonumber(string.sub(payload, i, i))
         end
 
     else
-        if messageType == "RPOK" then
+        if messageType == PACKET_REQUEST_POKEMON then
             GetPokemonTeam()
             SendRawPokemonData()
-        elseif messageType == "GPOS" then
-            SendToServer("GPOS")
-        elseif messageType == "RBAT" then
+        elseif messageType == PACKET_PING then
+            SendToServer(PACKET_PONG, payload)
+        elseif messageType == PACKET_REQUEST_BATTLE then
             --If player requests for a battle
             if (IsBusy() or LockFromScript ~= 0) then
-                SendToPlayer("TBUS")
+                SendToPlayer(PACKET_TOO_BUSY)
             else
                 OtherPlayerHasCancelled = 0
                 LockFromScript = 10
-                PlayerTalkingID2 = sender
+                TargetPlayer = sender
                 Loadscript(10)
             end
-        elseif messageType == "RTRA" then
+        elseif messageType == PACKET_REQUEST_TRADE then
             --If player requests for a trade
             if (IsBusy() or LockFromScript ~= 0) then
-                SendToPlayer("TBUS")
+                SendToPlayer(PACKET_TOO_BUSY)
             else
                 OtherPlayerHasCancelled = 0
                 LockFromScript = 11
-                PlayerTalkingID2 = sender
+                TargetPlayer = sender
                 Loadscript(6)
             end
-        elseif messageType == "CBAT" and sender == PlayerTalkingID2 then
+        elseif messageType == PACKET_CANCEL_BATTLE and sender == TargetPlayer then
             --If player cancels battle
             OtherPlayerHasCancelled = 1
-        elseif messageType == "CTRA" and sender == PlayerTalkingID2 then
+        elseif messageType == PACKET_CANCEL_TRADE and sender == TargetPlayer then
             --If player cancels trade
             OtherPlayerHasCancelled = 2
-        elseif messageType == "TBUS" and sender == PlayerTalkingID2 and LockFromScript == 4 then
+        elseif messageType == PACKET_TOO_BUSY and sender == TargetPlayer and LockFromScript == 4 then
             --If player is too busy to battle
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -2532,7 +2593,7 @@ local function onDataReceived()
             else
                 TextSpeedWait = 5
             end
-        elseif messageType == "TBUS" and sender == PlayerTalkingID2 and LockFromScript == 5 then
+        elseif messageType == PACKET_TOO_BUSY and sender == TargetPlayer and LockFromScript == 5 then
             --If player is too busy to trade
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -2540,7 +2601,7 @@ local function onDataReceived()
             else
                 TextSpeedWait = 6
             end
-        elseif messageType == "SBAT" and sender == PlayerTalkingID2 and LockFromScript == 4 then
+        elseif messageType == PACKET_ACCEPT_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
             --If player accepts your battle request
             RequestRawPokemonData()
             if Var8000[2] ~= 0 then
@@ -2549,7 +2610,7 @@ local function onDataReceived()
             else
                 TextSpeedWait = 1
             end
-        elseif messageType == "STRA" and sender == PlayerTalkingID2 and LockFromScript == 5 then
+        elseif messageType == PACKET_ACCEPT_TRADE and sender == TargetPlayer and LockFromScript == 5 then
             --If player accepts your trade request
             RequestRawPokemonData()
             if Var8000[2] ~= 0 then
@@ -2557,7 +2618,7 @@ local function onDataReceived()
             else
                 TextSpeedWait = 2
             end
-        elseif messageType == "DBAT" and sender == PlayerTalkingID2 and LockFromScript == 4 then
+        elseif messageType == PACKET_DECLINE_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
             --If player denies your battle request
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -2565,7 +2626,7 @@ local function onDataReceived()
             else
                 TextSpeedWait = 3
             end
-        elseif messageType == "DTRA" and sender == PlayerTalkingID2 and LockFromScript == 5 then
+        elseif messageType == PACKET_DECLINE_TRADE and sender == TargetPlayer and LockFromScript == 5 then
             --If player denies your trade request
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -2573,26 +2634,26 @@ local function onDataReceived()
             else
                 TextSpeedWait = 4
             end
-        elseif messageType == "ROFF" and sender == PlayerTalkingID2 and LockFromScript == 9 then
+        elseif messageType == PACKET_REFUSE_TRADE_OFFER and sender == TargetPlayer and LockFromScript == 9 then
             --If player refuses trade offer
             OtherPlayerHasCancelled = 3
-        elseif messageType == "STRT" then
+        elseif messageType == PACKET_SERVER_START then
             --If host accepts your join request
             ServerName = sender
             console:log("Joined Successfully!")
             ErrorMessage = ""
             MasterClient = "c"
-        elseif messageType == "DENY" then
+        elseif messageType == PACKET_SERVER_DENY then
             local reason = string.sub(payload, 1, 4)
             if tonumber(reason) ~= nil then
                 ErrorMessage = "Server requires client script version " .. reason .. " or higher."
-            elseif reason == "FULL" then
+            elseif reason == DENY_SERVER_FULL then
                 ErrorMessage = "Server is full."
-            elseif reason == "NAME" then
+            elseif reason == DENY_NAME_TAKEN then
                 ErrorMessage = "The name \"" .. Nickname .. "\" is already in use."
-            elseif reason == "CHRS" then
+            elseif reason == DENY_INVALID_CHARS then
                 ErrorMessage = "Your nickname contained unsupported characters. Try picking one that only uses letters and numbers."
-            elseif reason == "MALF" then
+            elseif reason == DENY_MALFORMED_PACKET then
                 ErrorMessage = "The server was not able to understand our request."
             else
                 ErrorMessage = "Connection refused. Error code: " .. reason
@@ -2600,15 +2661,15 @@ local function onDataReceived()
             SocketMain:close()
             console:log(ErrorMessage)
             EnableScript = false
-        elseif messageType == "SPOS" then
-            local player = playerProxies[sender]
+        elseif messageType == PACKET_PLAYER_UPDATE then
+            local player = PlayerProxies[sender]
             if player == nil then
-                player = newPlayerProxy()
-                playerProxies[sender] = player
+                player = NewPlayerProxy()
+                PlayerProxies[sender] = player
             end
-            onRemotePlayerUpdate(player, payload)
-        elseif messageType == "EXIT" then
-            playerProxies[sender] = nil
+            OnRemotePlayerUpdate(player, payload)
+        elseif messageType == PACKET_PLAYER_EXIT then
+            PlayerProxies[sender] = nil
         else
             console:log("Received unknown packet type \"" .. messageType .. "\". This may indicate that the client is a little outdated.")
         end
@@ -2621,7 +2682,7 @@ end
 --- If the nickname is greater than the target length, it will be truncated.
 local function FormatNickname()
     local nickLength = 8
-    Nickname = trim(Nickname)
+    Nickname = Trim(Nickname)
     if Nickname == nil or string.len(Nickname) == 0 then
         console:log("Nickname not set, generating a random one. You can set this in the client script.")
         local res = ""
@@ -2631,7 +2692,7 @@ local function FormatNickname()
         Nickname = res
     else
         if string.len(Nickname) < nickLength then
-            Nickname = rightpad(Nickname, nickLength)
+            Nickname = Rightpad(Nickname, nickLength)
         elseif string.len(Nickname) > nickLength then
             Nickname = string.sub(Nickname, 1, nickLength)
         end
@@ -2639,7 +2700,7 @@ local function FormatNickname()
 end
 
 --- Called whenever the user presses a button.
-local function onKeysRead()
+local function OnKeysRead()
     if EnableScript == true then
         local Keypress = emu:getKeys()
         local TalkingDirX = 0
@@ -2674,7 +2735,7 @@ local function onKeysRead()
                     Loadscript(3)
                     Keypressholding = 1
                     Keypress = 1
-                    --			SendToPlayer("RBAT")
+                    --			SendToPlayer(PACKET_REQUEST_BATTLE)
 
                 elseif Var8000[1] == 2 then
                     --			ConsoleForText:print("Trade selected")
@@ -2683,7 +2744,7 @@ local function onKeysRead()
                     Loadscript(4)
                     Keypressholding = 1
                     Keypress = 1
-                    SendToPlayer("RTRA")
+                    SendToPlayer(PACKET_REQUEST_TRADE)
 
                 elseif Var8000[1] == 3 then
                     --			ConsoleForText:print("Card selected")
@@ -2717,7 +2778,7 @@ local function onKeysRead()
                         LockFromScript = 1
                     end
                     --Interact with players
-                    for nick, player in pairs(playerProxies) do
+                    for nick, player in pairs(PlayerProxies) do
                         TalkingDirX = LocalPlayerCurrentX - player.CurrentX
                         TalkingDirY = LocalPlayerCurrentY - player.CurrentY
                         if LocalPlayerCurrentDirection == 1 and TalkingDirX == 1 and TalkingDirY == 0 then
@@ -2736,7 +2797,7 @@ local function onKeysRead()
                             emu:write16(Var8000Adr[1], 0)
                             emu:write16(Var8000Adr[2], 0)
                             emu:write16(Var8000Adr[14], 0)
-                            PlayerTalkingID2 = nick
+                            TargetPlayer = nick
                             LockFromScript = 2
                             Loadscript(2)
                         end
@@ -2747,12 +2808,12 @@ local function onKeysRead()
                 if LockFromScript == 4 and Keypressholding == 0 and Var8000[2] ~= 0 then
                     --Cancel battle request
                     Loadscript(15)
-                    SendToPlayer("CBAT")
+                    SendToPlayer(PACKET_CANCEL_BATTLE)
                     LockFromScript = 0
                 elseif LockFromScript == 5 and Keypressholding == 0 and Var8000[2] ~= 0 then
                     --Cancel trade request
                     Loadscript(16)
-                    SendToPlayer("CTRA")
+                    SendToPlayer(PACKET_CANCEL_TRADE)
                     LockFromScript = 0
                     TradeVars[1] = 0
                     TradeVars[2] = 0
@@ -2761,7 +2822,7 @@ local function onKeysRead()
                 elseif LockFromScript == 9 and (TradeVars[1] == 2 or TradeVars[1] == 4) and Keypressholding == 0 and Var8000[2] ~= 0 then
                     --Cancel trade request
                     Loadscript(16)
-                    SendToPlayer("CTRA")
+                    SendToPlayer(PACKET_CANCEL_TRADE)
                     LockFromScript = 0
                     TradeVars[1] = 0
                     TradeVars[2] = 0
@@ -2820,20 +2881,20 @@ local function ConnectToServer()
     local success, _ = SocketMain:connect(IPAddress, Port)
     if success then
         console:log("Joining game...")
-        _SendData("JOIN", ClientVersionNumber .. GameID)
-        SocketMain:add("received", onDataReceived)
+        _SendData(PACKET_JOIN_SERVER, CLIENT_VERSION_NUMBER .. GameID)
+        SocketMain:add("received", OnDataReceived)
     else
         console:log("Could not connect to server.")
     end
 end
 
 local function OnTimeout()
-    ReconnectTimer = SecondsBetweenReconnects
+    ReconnectTimer = SECONDS_BETWEEN_RECONNECTS
     SocketMain:close()
     MasterClient = "a"
     console:log("You have timed out")
-    for key, _ in pairs(playerProxies) do
-        playerProxies[key] = nil
+    for key, _ in pairs(PlayerProxies) do
+        PlayerProxies[key] = nil
     end
 end
 
@@ -2854,21 +2915,21 @@ local function DoRealTimeUpdates()
         ReconnectTimer = ReconnectTimer - DeltaTime
     else
         -- Connecting
-        ReconnectTimer = SecondsBetweenReconnects
+        ReconnectTimer = SECONDS_BETWEEN_RECONNECTS
         ConnectToServer()
     end
 
     if ConsoleUpdateTimer > 0 then
         ConsoleUpdateTimer = ConsoleUpdateTimer - DeltaTime
     else
-        ConsoleUpdateTimer = SecondsBetweenConsoleUpdates
-        updateConsole()
+        ConsoleUpdateTimer = SECONDS_BETWEEN_CONSOLE_UPDATES
+        UpdateConsole()
     end
 end
 
 --- Called each time a frame is completed.
 --- Note that mGBA's framerate may fluctuate by a wide margin (like when fast-forwarding).
-local function onFrameCompleted()
+local function OnFrameCompleted()
     if not EnableScript then return end
 
     SecondsSinceStart = os.clock() - TimeSessionStart
@@ -2888,7 +2949,7 @@ local function onFrameCompleted()
 
     --If you cancel/stop
     if LockFromScript == 0 then
-        PlayerTalkingID2 = "00000000"
+        TargetPlayer = "00000000"
     end
 
     --Wait until other player accepts battle
@@ -2908,7 +2969,7 @@ local function onFrameCompleted()
                 Loadscript(20)
             end
         end
-        --				SendToPlayer("RBAT")
+        --				SendToPlayer(PACKET_REQUEST_BATTLE)
 
         --Wait until other player accepts trade
     elseif LockFromScript == 5 then
@@ -2926,14 +2987,14 @@ local function onFrameCompleted()
                 Loadscript(21)
             end
         end
-        --				SendToPlayer("RTRA")
+        --				SendToPlayer(PACKET_REQUEST_TRADE)
 
         --Show card. Placeholder for now
     elseif LockFromScript == 6 then
         if Var8000[2] ~= 0 then
             --		ConsoleForText:print("Var 8001: " .. Var8000[2])
             LockFromScript = 0
-            --	then SendToPlayer("RTRA")
+            --	then SendToPlayer(PACKET_REQUEST_TRADE)
         end
 
         --Exit message
@@ -2959,7 +3020,7 @@ local function onFrameCompleted()
         if Var8000[2] == 2 then
             if OtherPlayerHasCancelled == 0 then
                 RequestRawPokemonData()
-                SendToPlayer("SBAT")
+                SendToPlayer(PACKET_ACCEPT_BATTLE)
                 LockFromScript = 8
                 Loadscript(13)
             else
@@ -2969,7 +3030,7 @@ local function onFrameCompleted()
             end
         elseif Var8000[2] == 1 then
             LockFromScript = 0
-            SendToPlayer("DBAT")
+            SendToPlayer(PACKET_DECLINE_BATTLE)
             Keypressholding = 1
         end
 
@@ -2980,7 +3041,7 @@ local function onFrameCompleted()
         if Var8000[2] == 2 then
             if OtherPlayerHasCancelled == 0 then
                 RequestRawPokemonData()
-                SendToPlayer("STRA")
+                SendToPlayer(PACKET_ACCEPT_TRADE)
                 LockFromScript = 9
             else
                 OtherPlayerHasCancelled = 0
@@ -2989,7 +3050,7 @@ local function onFrameCompleted()
             end
         elseif Var8000[2] == 1 then
             LockFromScript = 0
-            SendToPlayer("DTRA")
+            SendToPlayer(PACKET_DECLINE_TRADE)
             Keypressholding = 1
         end
     end
@@ -3000,21 +3061,21 @@ end
 -- CALLBACKS AND SCRIPT START ------------------------------------------------------------------------------------------
 
 
-callbacks:add("reset", onGameStart)
-callbacks:add("shutdown", onGameShutdown)
-callbacks:add("keysRead", onKeysRead)
+callbacks:add("reset", OnGameStart)
+callbacks:add("shutdown", OnGameShutdown)
+callbacks:add("keysRead", OnKeysRead)
 
 FormatNickname()
 
 if not (emu == nil) then
     -- Loaded into mGBA and a game is already running.
     console:log("Script loaded.")
-    onGameStart()
+    OnGameStart()
 
     -- Add this callback after initializing to avoid race conditions.
-    callbacks:add("frame", onFrameCompleted)
+    callbacks:add("frame", OnFrameCompleted)
 else
     -- Either this is mGBA with no running game, or not mGBA at all.
     console:log("Script loaded, but no running game was found. (This is fine)")
-    callbacks:add("frame", onFrameCompleted)
+    callbacks:add("frame", OnFrameCompleted)
 end
