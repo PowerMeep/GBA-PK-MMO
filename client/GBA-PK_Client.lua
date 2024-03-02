@@ -3,7 +3,7 @@ local FRLG = require(".FireRed_LeafGreen")
 
 -- CONSTANTS
 --- Version number for this client script. Used to track compatibility with the server.
-local CLIENT_VERSION_NUMBER = 1016
+local CLIENT_VERSION_NUMBER = 1017
 --- Flip the gender of remote players. Used for debugging sprites.
 local DEBUG_GENDER_SWITCH = false
 --- Maximum time to wait for a packet from the server before timing out.
