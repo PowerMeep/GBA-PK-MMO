@@ -66,7 +66,7 @@ If you're interested, I wrote about it in [the server file.](server/GBA-PK_Serve
 ### Running
 1. Edit environment variables (See [Environment Variables](#Environment-Variables))
 2. Run the server script somewhere you can reach it with TCP traffic.
-3. Dockerfile included!
+3. You can also pull and deploy the image from [DockerHub](https://hub.docker.com/r/powermeep/gba-pk-mmo)
 
 ### Environment Variables
 
