@@ -1,21 +1,4 @@
---- Connection Information
-local IPAddress, Port = "127.0.0.1", 4096
-
---- Screen name. Max 8 characters. Pokemon's in-game max is 7, so that might be safer than using 8.
-local Nickname = ""
-
---- Maximum number of remote players that can be drawn at once.
---- This does NOT affect how many people can be in your game at once or even nearby.
---- If there are more players nearby than you can draw, they just won't be drawn.
---- Increase this at your own risk. A number too big could corrupt memory or something.
---- - "4" seems pretty safe.
---- - "8" has worked in a few, non-rigorous tests.
---- - "32" shows up in a comment indicating a theoretical maximum value.
-local MaxRenderedPlayers = 8
-
-
--- Dear Player, please don't mess with anything below this line unless you know what you're doing. ---------------------
--- This version of the client script is not compatible with the original server script anymore. ------------------------
+local Config = require(".Config")
 local FRLG = require(".FireRed_LeafGreen")
 
 -- CONSTANTS
@@ -125,6 +108,8 @@ local PreviousSecondsSinceStart = 0
 --- The amount of time since the previous frame.
 --- Used to convert a frame-based update cycle into a realtime one.
 local DeltaTime = 0
+--- Copy of the Nickname that has been formatted for sending in packets.
+local FormattedNickname = ""
 
 -- NETWORKING
 --- The socket used for communications with the server.
@@ -330,9 +315,9 @@ local function UpdateConsole()
     end
 
     ConsoleForText:clear()
-    SetLine(0, "Nickname: " .. Nickname)
+    SetLine(0, "Nickname: " .. FormattedNickname)
     SetLine(1, "Game: " .. GameName)
-    SetLine(2, "Connection: " .. IPAddress .. ":" .. Port)
+    SetLine(2, "Connection: " .. Config.Host .. ":" .. Config.Port)
 
     if MasterClient == "c" then
         SetLine(3, "Server Name: " .. ServerName)
@@ -366,7 +351,7 @@ local function _SendData(PacketType, Recipient, Payload)
     if PayloadLen > 43 then
         console:log("Error - tried to send a " .. PacketType .. " packet that was too long")
     else
-        local packet = Nickname .. Recipient .. PacketType .. Payload .. "U"
+        local packet = FormattedNickname .. Recipient .. PacketType .. Payload .. "U"
         SocketMain:send(packet)
     end
 end
@@ -635,7 +620,7 @@ local function NewRenderer(index)
 end
 --- Precalculate rendering addresses for this session.
 local function CreateRenderers()
-    for i = 1, MaxRenderedPlayers do
+    for i = 1, Config.MaxRenderedPlayers do
         NewRenderer(i)
     end
 end
@@ -2336,7 +2321,7 @@ local function DrawChars()
                 RenderPlayer(player, Renderers[currentRendererIndex])
                 player.LastRenderer = currentRendererIndex
                 currentRendererIndex = currentRendererIndex + 1
-                if currentRendererIndex > MaxRenderedPlayers then
+                if currentRendererIndex > Config.MaxRenderedPlayers then
                     break
                 end
             else
@@ -2344,12 +2329,12 @@ local function DrawChars()
             end
         end
         -- Clear any renderers that weren't used this frame
-        for i = currentRendererIndex, MaxRenderedPlayers do
+        for i = currentRendererIndex, Config.MaxRenderedPlayers do
             EraseAllRenderInstructionsIfDirty(Renderers[i])
         end
     else
         -- TODO: this probably doesn't need to be set each frame.
-        for i = 1, MaxRenderedPlayers do
+        for i = 1, Config.MaxRenderedPlayers do
             Renderers[i].isDirty = true
         end
     end
@@ -2650,7 +2635,7 @@ local function OnDataReceived()
             elseif reason == DENY_SERVER_FULL then
                 ErrorMessage = "Server is full."
             elseif reason == DENY_NAME_TAKEN then
-                ErrorMessage = "The name \"" .. Nickname .. "\" is already in use."
+                ErrorMessage = "The name \"" .. FormattedNickname .. "\" is already in use."
             elseif reason == DENY_INVALID_CHARS then
                 ErrorMessage = "Your nickname contained unsupported characters. Try picking one that only uses letters and numbers."
             elseif reason == DENY_MALFORMED_PACKET then
@@ -2682,19 +2667,19 @@ end
 --- If the nickname is greater than the target length, it will be truncated.
 local function FormatNickname()
     local nickLength = 8
-    Nickname = Trim(Nickname)
-    if Nickname == nil or string.len(Nickname) == 0 then
+    FormattedNickname = Trim(Config.Nickname)
+    if FormattedNickname == nil or string.len(FormattedNickname) == 0 then
         console:log("Nickname not set, generating a random one. You can set this in the client script.")
         local res = ""
         for _ = 1, nickLength do
             res = res .. string.char(math.random(97, 122))
         end
-        Nickname = res
+        FormattedNickname = res
     else
-        if string.len(Nickname) < nickLength then
-            Nickname = Rightpad(Nickname, nickLength)
-        elseif string.len(Nickname) > nickLength then
-            Nickname = string.sub(Nickname, 1, nickLength)
+        if string.len(FormattedNickname) < nickLength then
+            FormattedNickname = Rightpad(FormattedNickname, nickLength)
+        elseif string.len(FormattedNickname) > nickLength then
+            FormattedNickname = string.sub(FormattedNickname, 1, nickLength)
         end
     end
 end
@@ -2878,7 +2863,7 @@ end
 local function ConnectToServer()
     console:log("Attempting to connect to server...")
     SocketMain = socket.tcp()
-    local success, _ = SocketMain:connect(IPAddress, Port)
+    local success, _ = SocketMain:connect(Config.Host, Config.Port)
     if success then
         console:log("Joining game...")
         _SendData(PACKET_JOIN_SERVER, CLIENT_VERSION_NUMBER .. GameID)

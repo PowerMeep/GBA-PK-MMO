@@ -34,9 +34,9 @@ might actually be able to _see,_ but there is a caveat to the current approach. 
 ### Client
 The client is composed of a main file, and another file housing all the sprite data.
 
-Each player will need to edit this file and change a few fields.
+Each player will need to edit the Config file and change a few things.
 - Nickname
-- IPAddress
+- Host
 - Port
 
 And if they're feeling especially brave, feel free to also mess with `MaxRenderedPlayers`. It controls how many other players
@@ -57,7 +57,7 @@ Be aware that at some point, writing sprite data into memory may overwrite somet
 Same as the original.
 1. Get [mGBA](https://mgba.io) version 0.10.0 or higher.
 2. Put the client scripts in mGBA's `scripts` folder.
-3. Edit the `GBA-PK_Client.lua` to point to where the server is, as well as add your desired nickname (up to 8 characters).
+3. Edit the `Config.lua` to point to where the server is, as well as add your desired nickname (up to 8 characters).
 4. Run mGBA.
 5. Load the script.
 6. Open your legally ripped ROM file.
@@ -244,30 +244,6 @@ marked as walkable, presumably erroneously, then a non-walkable transition will 
 - Fainting teleports you inside Pokemon Center. Flag not set to 1.
 - Using "Fly" - Teleports you outside a Pokemon Center. Flag set to 1.
 - Using "Teleport" - ??? Probably inside Pokemon Center?
-
-### Timers
-#### Frametime Events
-The primary entry point for all client script operations is the `onFrameCompleted` method.
-As the name implies, it is called after the emulator has completed one frame.
-However, mGBA's framerate will fluctuate wildly during gameplay, such as when the user toggles fast-forward mode.
-- Updating the visuals of other players
-- Reading the current system memory, which may have changed significantly during this frame.
-- Sending packets involving changing maps.
-
-#### Realtime Events
-Some events are better suited to running incrementally based on the amount of real-world time that has passed.
-- Sending current position updates. Having a fixed period between updates allows for more reliable interpolation
-  and can help control the total network client.
-- Timeouts. These should also happen in realtime. You don't want to time out faster because you're fast-forwarding, right?
-
-#### Async Events
-These events are not on a timer and are instead handled asynchronously whenever they occur.
-These are set up as callbacks.
-- New game is starting.
-- Game is shutting down.
-- User input detected.
-- Reading packets from the server. These should always be handled as soon as they come in.
-- The socket has been disconnected.
 
 ### Client-side socket management
 The client tracks its connection status through two means. This could be reduced to one.
