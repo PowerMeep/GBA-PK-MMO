@@ -1424,6 +1424,9 @@ local function GetPosition()
     LocalPlayerMapID    = emu:read16(33813416)
     LocalPlayerCurrentX = emu:read16(33779272)
     LocalPlayerCurrentY = emu:read16(33779274)
+end
+
+local function GetSpriteData()
     local PlayerAction  = emu:read8(33779284)
 
     -- Decode current sprite data
@@ -1445,7 +1448,7 @@ local function GetPosition()
     -- if PlayerAction == 255 then PlayerExtra1 = 0 end
 end
 
-local function NoPlayersIfScreen()
+local function GetScreenState()
     -- TODO: Figure out what this is and rename it.
     local ScreenData1 = emu:read32(33691280)
     local IntroScreenData = emu:read8(33686716)
@@ -2250,10 +2253,6 @@ local function RenderPlayer(player, renderer)
 end
 
 local function DrawChars()
-    if not EnableScript then return end
-
-    --Make sure the sprites are loaded
-    NoPlayersIfScreen()
     if ShouldDrawRemotePlayers == 1 then
         local currentRendererIndex = 1
         CalculateCamera()
@@ -2860,18 +2859,7 @@ local function DoRealTimeUpdates()
     end
 end
 
---- Called each time a frame is completed.
---- Note that mGBA's framerate may fluctuate by a wide margin (like when fast-forwarding).
-local function OnFrameCompleted()
-    if not EnableScript then return end
-
-    SecondsSinceStart = os.clock() - TimeSessionStart
-    DeltaTime = SecondsSinceStart - PreviousSecondsSinceStart
-    PreviousSecondsSinceStart = SecondsSinceStart
-
-    GetPosition()
-    DoRealTimeUpdates()
-
+local function DoScriptUpdates()
     for key, adr in pairs(Var8000Adr) do
         Var8000[key] = tonumber(emu:read16(adr))
     end
@@ -2987,7 +2975,28 @@ local function OnFrameCompleted()
             Keypressholding = 1
         end
     end
+end
 
+--- Called each time a frame is completed.
+--- Note that mGBA's framerate may fluctuate by a wide margin (like when fast-forwarding).
+local function OnFrameCompleted()
+    if not EnableScript then return end
+
+    -- Calculate time difference from previous frame
+    SecondsSinceStart = os.clock() - TimeSessionStart
+    DeltaTime = SecondsSinceStart - PreviousSecondsSinceStart
+    PreviousSecondsSinceStart = SecondsSinceStart
+
+    -- Update game state
+    GetScreenState()
+    GetPosition()
+    GetSpriteData()
+    DoScriptUpdates()
+
+    -- Check timers; send updates to server
+    DoRealTimeUpdates()
+
+    -- Update visuals
     DrawChars()
 end
 
