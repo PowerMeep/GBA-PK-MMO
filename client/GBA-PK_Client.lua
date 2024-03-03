@@ -159,11 +159,13 @@ local LocalPlayerMapEntranceType = 1
 --- Whether the player has changed maps this frame
 local LocalPlayerMapChange = 0
 --- The direction the local player is facing.
---- - 1 = WEST
---- - 2 = EAST
---- - 3 = NORTH
---- - 4 = SOUTH
-local LocalPlayerCurrentDirection = 0
+--- Initialize to up, because it conveys to other players that you might not
+--- quite be ready yet.
+--- - 1 = LEFT
+--- - 2 = RIGHT
+--- - 3 = UP
+--- - 4 = DOWN
+local LocalPlayerCurrentDirection = 3
 -- ??? This may represent the offset of the current map to the previous.
 local LocalPlayerDifferentMapX = 0
 local LocalPlayerDifferentMapY = 0
@@ -177,7 +179,9 @@ local LocalPlayerPreviousY = 0
 local LocalPlayerStartX = 0
 local LocalPlayerStartY = 0
 -- TODO: figure out what this does and rename it
-local LocalPlayerExtra1 = 0
+--- Something to do with sprites and animation.
+--- This value correlets to a default standing pose.
+local LocalPlayerExtra1 = 2
 --- Sprite Number (0 = Male, 1 = Female)
 local LocalPlayerGender = 0
 --- Player Movement Method (0 = Walking, 1 = Biking, 2 = Surfing)
@@ -1422,38 +1426,38 @@ local function GetPosition()
     LocalPlayerCurrentY = emu:read16(33779274)
     local PlayerAction  = emu:read8(33779284)
 
+    -- Decode current sprite data
     local Bike = emu:read16(33687112)
     if Bike > 3000 then Bike = Bike + BikeOffset end
-    local DecodedBikeAction   = FRLG.BikeDecoder[Bike]
-    -- If no value could be read for the Bike, then don't try to decode it.
-    if DecodedBikeAction == nil then return end
+    local DecodedBikeAction  = FRLG.BikeDecoder[Bike]
 
-    LocalPlayerGender         = DecodedBikeAction[1]
-    LocalPlayerMovementMethod = DecodedBikeAction[2]
-
-    local DecodedMovement       = FRLG.MovementDecoder[LocalPlayerMovementMethod][PlayerAction]
-    LocalPlayerCurrentDirection = DecodedMovement[1]
-    LocalPlayerExtra1 = DecodedMovement[2 + ShouldDrawRemotePlayers]
+    if DecodedBikeAction ~= nil then
+        LocalPlayerGender         = DecodedBikeAction[1]
+        LocalPlayerMovementMethod = DecodedBikeAction[2]
+        local DecodedMovement     = FRLG.MovementDecoder[LocalPlayerMovementMethod][PlayerAction]
+        if DecodedMovement ~= nil then
+            LocalPlayerCurrentDirection = DecodedMovement[1]
+            LocalPlayerExtra1 = DecodedMovement[2 + ShouldDrawRemotePlayers]
+        end
+    end
 
     -- This was in a block for MovementMethod = MOVEMENT_ON_FOOT and ShouldDrawRemotePlayers == 1
     -- if PlayerAction == 255 then PlayerExtra1 = 0 end
 end
 
 local function NoPlayersIfScreen()
+    -- TODO: Figure out what this is and rename it.
     local ScreenData1 = emu:read32(33691280)
-    local ScreenData3 = emu:read8(33686716)
-    local ScreenData4 = emu:read8(33685514)
+    local IntroScreenData = emu:read8(33686716)
+    local BattleScreenData = emu:read8(33685514)
 
-    --	if TempVar2 == 0 then ConsoleForText:print("ScreenData: " .. ScreenData1 .. " " .. ScreenData2 .. " " .. ScreenData3) end
-    --If screen data are these then hide players
-    if (ScreenData3 ~= 80 or (ScreenData1 > 0)) and (LockFromScript == 0 or LockFromScript == 8 or LockFromScript == 9) then
+    if (IntroScreenData ~= 80 or (ScreenData1 > 0)) and (LockFromScript == 0 or LockFromScript == 8 or LockFromScript == 9) then
         ShouldDrawRemotePlayers = 0
-        --	console:log("SCREENDATA OFF: " .. LockFromScript)
     else
         ShouldDrawRemotePlayers = 1
-        --	console:log("SCREENDATA ON")
     end
-    if ScreenData4 == 1 then
+
+    if BattleScreenData == 1 then
         LocalPlayerIsInBattle = 1
     else
         LocalPlayerIsInBattle = 0
