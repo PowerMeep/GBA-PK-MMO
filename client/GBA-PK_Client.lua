@@ -241,8 +241,11 @@ local function NewPlayerProxy()
         --- How the current map was entered
         --- Presumably used to determine visibility with the previous map
         MapEntranceType=1,
-        --- ??? Padded to 3 characters in the packet
-        --- used to determine whether the characters is surfing
+        --- ???
+        --- - Used to determine the x offset in calculating visibility (bike starts further to the left)
+        --- - Used to determine the currently playing animation
+        --- - Used to check movement method and set offsets for rendering
+        --- - Padded to 3 characters in the packet
         PlayerExtra1=0,
         --- Sprite Number (Male / Female)
         Gender=0,
@@ -255,16 +258,22 @@ local function NewPlayerProxy()
         PlayerVis=0,
         --- A flag for whether this player recently changed maps
         MapChange=0,
-        -- Data used for rendering
+        --- The current frame of the playing animation
         PlayerAnimationFrame=0,
+        --- A value that oscillates between 0 and 1 each time the animation loops
         PlayerAnimationFrame2=0,
+        --- The number of frames in this animation
         PlayerAnimationFrameMax=0,
         PreviousPlayerAnimation=0,
         --- The main sprite to draw.
+        --- - The surfing pokemon when surfing
+        --- - The player sprite in other cases
         SpriteID=0,
         --- The second sprite to draw.
-        --- Used for surfing.
+        --- - The player sitting sprite when surfing.
         SpriteID2=0,
+        --- The ID for the currently playing animation
+        --- Used to choose the current sprites as well as lerp positon
         AnimateID=0
     }
 
@@ -1382,6 +1391,7 @@ local function UpdatePlayerVisibility(player)
     --This is for the bike + surf
     if player.PlayerExtra1 >= 17 and player.PlayerExtra1 <= 40 then
         MinX = -8
+    -- FIXME: never used. The range of 33-40 is completely within the range of 17-40
     elseif player.PlayerExtra1 >= 33 and player.PlayerExtra1 <= 40 then
         MinX = 8
     else
@@ -1509,7 +1519,6 @@ local function AnimatePlayerMovement(player)
             if player.PlayerAnimationFrame >= 3 and player.PlayerAnimationFrame <= 11 then
                 if player.PlayerAnimationFrame2 == 0 then
                     player.SpriteID1 = 4
-
                 else
                     player.SpriteID1 = 5
                 end
@@ -1875,7 +1884,6 @@ end
 local function HandleSprites(player)
     --Because handling images every time would become a hassle, this will automatically set the image of every player
 
-
     --PlayerExtra 1 = Down Face
     --PlayerExtra 2 = Up Face
     --PlayerExtra 3 or 4 = Left/Right Face
@@ -1892,6 +1900,7 @@ local function HandleSprites(player)
     --PlayerExtra 18 = Up Bike
     --PlayerExtra 19 or 20 = Left/Right Bike
     --Facing down
+
     if player.PlayerExtra1 == 1 then
         player.SpriteID1 = 3
         player.CurrentFacingDirection = 4
