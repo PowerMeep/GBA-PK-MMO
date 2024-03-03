@@ -164,8 +164,6 @@ local LocalPlayerMapChange = 0
 --- - 3 = NORTH
 --- - 4 = SOUTH
 local LocalPlayerCurrentDirection = 0
---- This may actually represent the current animation set being used
-local LocalPlayerFacing = 0
 -- ??? This may represent the offset of the current map to the previous.
 local LocalPlayerDifferentMapX = 0
 local LocalPlayerDifferentMapY = 0
@@ -395,10 +393,14 @@ local function SendPositionToServer()
     --
     -- These values are padded to a specific length.
     -- In the case of numerics, this is achieved by adding a larger number to them.
+    --
+    -- Starts with four unused bytes (might need to be numeric to preserve compatibility)
+    -- Three unused bytes in the middle
+    -- One unused byte at the end
     local Payload = "1000"
     Payload = Payload .. (LocalPlayerCurrentX + 2000)
     Payload = Payload .. (LocalPlayerCurrentY + 2000)
-    Payload = Payload .. (LocalPlayerFacing + 100)
+    Payload = Payload .. "000"
     Payload = Payload .. (LocalPlayerExtra1 + 100)
     Payload = Payload .. LocalPlayerGender
     Payload = Payload .. LocalPlayerMovementMethod
@@ -408,6 +410,7 @@ local function SendPositionToServer()
     Payload = Payload .. LocalPlayerMapEntranceType
     Payload = Payload .. (LocalPlayerStartX + 2000)
     Payload = Payload .. (LocalPlayerStartY + 2000)
+    Payload = Payload .. "0"
 
     if (Payload == LastSposPayload) and SposSquelchCounter < NumSposToSquelch then
         SposSquelchCounter = SposSquelchCounter + 1
@@ -1409,10 +1412,10 @@ local function GetPosition()
         end
         LocalPlayerMapChange = 1
     end
-    LocalPlayerMapID = emu:read16(33813416)
+    LocalPlayerMapID    = emu:read16(33813416)
     LocalPlayerCurrentX = emu:read16(33779272)
     LocalPlayerCurrentY = emu:read16(33779274)
-    LocalPlayerFacing = emu:read8(33779284)
+    local PlayerAction  = emu:read8(33779284)
 
     local DecodedBikeAction   = FRLG.BikeDecoder[Bike]
     -- If no value could be read for the Bike, then don't try to decode it.
@@ -1421,65 +1424,53 @@ local function GetPosition()
     LocalPlayerGender         = DecodedBikeAction[1]
     LocalPlayerMovementMethod = DecodedBikeAction[2]
 
-    local DecodedMovement = FRLG.MovementDecoder[LocalPlayerMovementMethod][LocalPlayerFacing]
-    LocalPlayerExtra1    = DecodedMovement[1]
+    local DecodedMovement       = FRLG.MovementDecoder[LocalPlayerMovementMethod][PlayerAction]
+    LocalPlayerExtra1           = DecodedMovement[1]
     LocalPlayerCurrentDirection = DecodedMovement[2]
 
     if LocalPlayerMovementMethod == 2 then
         if ShouldDrawRemotePlayers == 0 then
             if LocalPlayerCurrentDirection == 4 then
                 LocalPlayerExtra1 = 33
-                LocalPlayerFacing = 0
             end
             if LocalPlayerCurrentDirection == 3 then
                 LocalPlayerExtra1 = 34
-                LocalPlayerFacing = 1
             end
             if LocalPlayerCurrentDirection == 1 then
                 LocalPlayerExtra1 = 35
-                LocalPlayerFacing = 2
             end
             if LocalPlayerCurrentDirection == 2 then
                 LocalPlayerExtra1 = 36
-                LocalPlayerFacing = 3
             end
         end
     elseif LocalPlayerMovementMethod == 1 then
         if ShouldDrawRemotePlayers == 0 then
             if LocalPlayerCurrentDirection == 4 then
                 LocalPlayerExtra1 = 17
-                LocalPlayerFacing = 0
             end
             if LocalPlayerCurrentDirection == 3 then
                 LocalPlayerExtra1 = 18
-                LocalPlayerFacing = 1
             end
             if LocalPlayerCurrentDirection == 1 then
                 LocalPlayerExtra1 = 19
-                LocalPlayerFacing = 2
             end
             if LocalPlayerCurrentDirection == 2 then
                 LocalPlayerExtra1 = 20
-                LocalPlayerFacing = 3
             end
         end
     else
         if ShouldDrawRemotePlayers == 0 then
             if LocalPlayerCurrentDirection == 4 then
                 LocalPlayerExtra1 = 1
-                LocalPlayerFacing = 0
             end
             if LocalPlayerCurrentDirection == 3 then
                 LocalPlayerExtra1 = 2
-                LocalPlayerFacing = 1
             end
             if LocalPlayerCurrentDirection == 1 then
                 LocalPlayerExtra1 = 3
-                LocalPlayerFacing = 2
             end
             if LocalPlayerCurrentDirection == 2 then
                 LocalPlayerExtra1 = 4
-                LocalPlayerFacing = 3
             end
         end
         --	if Facing == 255 then PlayerExtra1 = 0 end
@@ -2332,19 +2323,28 @@ local function DrawChars()
 end
 
 local function OnRemotePlayerUpdate(player, payload)
-    local x      = tonumber(string.sub(payload, 5, 8)) - 2000
-    local y      = tonumber(string.sub(payload, 9, 12)) - 2000
-    local facing = tonumber(string.sub(payload, 13, 15)) - 100
-    local gender = tonumber(string.sub(payload, 19, 19))
-    local map = tonumber(string.sub(payload, 22, 27)) - 100000
+    -- Four free bytes
+    local x               = tonumber(string.sub(payload,  5,  8)) - 2000
+    local y               = tonumber(string.sub(payload,  9, 12)) - 2000
+    -- Three free bytes
+    player.PlayerExtra1   = tonumber(string.sub(payload, 16, 18)) - 100
+    local gender          = tonumber(string.sub(payload, 19, 19))
+    player.MovementMethod = tonumber(string.sub(payload, 20, 20))
+    player.IsInBattle     = tonumber(string.sub(payload, 21, 21))
+    local map             = tonumber(string.sub(payload, 22, 27)) - 100000
+    local prevMap         = tonumber(string.sub(payload, 28, 33)) - 100000
+    local mapEntranceType = tonumber(string.sub(payload, 34, 34))
+    player.StartX         = tonumber(string.sub(payload, 35, 38)) - 2000
+    player.StartY         = tonumber(string.sub(payload, 39, 42)) - 2000
+    -- One free byte
 
     if player.CurrentMapID ~= map  then
         player.PlayerAnimationFrame = 0
         player.PlayerAnimationFrame2 = 0
         player.PlayerAnimationFrameMax = 0
         player.CurrentMapID = map
-        player.PreviousMapID = tonumber(string.sub(payload, 28, 33)) - 100000
-        player.MapEntranceType = tonumber(string.sub(payload, 34, 34))
+        player.PreviousMapID = prevMap
+        player.MapEntranceType = mapEntranceType
         -- Set the position of where they were last on their previous map
         player.PreviousX = player.CurrentX
         player.PreviousY = player.CurrentY
@@ -2359,20 +2359,12 @@ local function OnRemotePlayerUpdate(player, payload)
     -- Where the player should animate toward
     player.FutureX = x
     player.FutureY = y
-    -- Misc data about this player
-    player.PlayerExtra1 = tonumber(string.sub(payload, 16, 18)) - 100
 
     if DEBUG_GENDER_SWITCH then
         player.Gender = 1 - gender
     else
         player.Gender = gender
     end
-
-    player.MovementMethod = tonumber(string.sub(payload, 20, 20))
-    player.IsInBattle = tonumber(string.sub(payload, 21, 21))
-    -- Where this player entered their map
-    player.StartX = tonumber(string.sub(payload, 35, 38)) - 2000
-    player.StartY = tonumber(string.sub(payload, 39, 42)) - 2000
 
     -- Determine current state from sprite
     HandleSprites(player)
