@@ -255,9 +255,6 @@ local function NewPlayerProxy()
         --- Whether this player could be visible to us
         --- True if we either share map ids or previous map ids
         PlayerVis=0,
-        --- A flag for whether to mirror the current sprite
-        --- Used for right-facing sprites.
-        Facing2=0,
         --- A flag for whether this player recently changed maps
         MapChange=0,
         -- Data used for rendering
@@ -1955,99 +1952,83 @@ local function HandleSprites(player)
     if player.PlayerExtra1 == 1 then
         player.SpriteID1 = 3
         player.CurrentFacingDirection = 4
-        player.Facing2 = 0
         player.AnimateID = 251
 
         --Facing up
     elseif player.PlayerExtra1 == 2 then
         player.SpriteID1 = 2
         player.CurrentFacingDirection = 3
-        player.Facing2 = 0
         player.AnimateID = 252
 
         --Facing left
     elseif player.PlayerExtra1 == 3 then
         player.SpriteID1 = 1
         player.CurrentFacingDirection = 1
-        player.Facing2 = 0
         player.AnimateID = 253
 
         --Facing right
     elseif player.PlayerExtra1 == 4 then
         player.SpriteID1 = 1
         player.CurrentFacingDirection = 2
-        player.Facing2 = 1
         player.AnimateID = 254
 
         --walk down
     elseif player.PlayerExtra1 == 5 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 4
         player.AnimateID = 1
 
         --walk up
     elseif player.PlayerExtra1 == 6 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 3
         player.AnimateID = 2
 
         --walk left
     elseif player.PlayerExtra1 == 7 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 1
         player.AnimateID = 3
 
         --walk right
     elseif player.PlayerExtra1 == 8 then
-        player.Facing2 = 1
         player.CurrentFacingDirection = 2
         player.AnimateID = 13
 
         --turn down
     elseif player.PlayerExtra1 == 9 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 4
         player.AnimateID = 10
 
         --turn up
     elseif player.PlayerExtra1 == 10 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 3
         player.AnimateID = 11
 
         --turn left
     elseif player.PlayerExtra1 == 11 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 1
         player.AnimateID = 12
 
         --turn right
     elseif player.PlayerExtra1 == 12 then
-        player.Facing2 = 1
         player.CurrentFacingDirection = 2
         player.AnimateID = 12
 
         --run down
     elseif player.PlayerExtra1 == 13 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 4
         player.AnimateID = 4
 
         --run up
     elseif player.PlayerExtra1 == 14 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 3
         player.AnimateID = 5
 
         --run left
     elseif player.PlayerExtra1 == 15 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 1
         player.AnimateID = 6
 
         --run right
     elseif player.PlayerExtra1 == 16 then
-        player.Facing2 = 1
         player.CurrentFacingDirection = 2
         player.AnimateID = 14
 
@@ -2055,75 +2036,63 @@ local function HandleSprites(player)
     elseif player.PlayerExtra1 == 17 then
         player.SpriteID1 = 12
         player.CurrentFacingDirection = 4
-        player.Facing2 = 0
         player.AnimateID = 251
 
         --bike face up
     elseif player.PlayerExtra1 == 18 then
         player.SpriteID1 = 11
         player.CurrentFacingDirection = 3
-        player.Facing2 = 0
         player.AnimateID = 252
 
         --bike face left
     elseif player.PlayerExtra1 == 19 then
         player.SpriteID1 = 10
         player.CurrentFacingDirection = 1
-        player.Facing2 = 0
         player.AnimateID = 253
 
         --bike face right
     elseif player.PlayerExtra1 == 20 then
         player.SpriteID1 = 10
         player.CurrentFacingDirection = 2
-        player.Facing2 = 1
         player.AnimateID = 254
 
         --bike move down
     elseif player.PlayerExtra1 == 21 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 4
         player.AnimateID = 7
 
         --bike move up
     elseif player.PlayerExtra1 == 22 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 3
         player.AnimateID = 8
 
         --bike move left
     elseif player.PlayerExtra1 == 23 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 1
         player.AnimateID = 9
 
         --bike move right
     elseif player.PlayerExtra1 == 24 then
-        player.Facing2 = 1
         player.CurrentFacingDirection = 2
         player.AnimateID = 15
 
         --bike fast move down
     elseif player.PlayerExtra1 == 25 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 4
         player.AnimateID = 7
 
         --bike fast move up
     elseif player.PlayerExtra1 == 26 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 3
         player.AnimateID = 8
 
         --bike fast move left
     elseif player.PlayerExtra1 == 27 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 1
         player.AnimateID = 9
 
         --bike fast move right
     elseif player.PlayerExtra1 == 28 then
-        player.Facing2 = 1
         player.CurrentFacingDirection = 2
         player.AnimateID = 15
 
@@ -2131,28 +2100,24 @@ local function HandleSprites(player)
     elseif player.PlayerExtra1 == 29 then
         player.SpriteID1 = 12
         player.CurrentFacingDirection = 4
-        player.Facing2 = 0
         player.AnimateID = 251
 
         --bike hit wall up
     elseif player.PlayerExtra1 == 30 then
         player.SpriteID1 = 11
         player.CurrentFacingDirection = 3
-        player.Facing2 = 0
         player.AnimateID = 252
 
         --bike hit wall left
     elseif player.PlayerExtra1 == 31 then
         player.SpriteID1 = 10
         player.CurrentFacingDirection = 1
-        player.Facing2 = 0
         player.AnimateID = 253
 
         --bike hit wall right
     elseif player.PlayerExtra1 == 32 then
         player.SpriteID1 = 10
         player.CurrentFacingDirection = 2
-        player.Facing2 = 1
         player.AnimateID = 254
 
         --Surfing
@@ -2160,55 +2125,46 @@ local function HandleSprites(player)
         --Facing down
     elseif player.PlayerExtra1 == 33 then
         player.CurrentFacingDirection = 4
-        player.Facing2 = 0
         player.AnimateID = 17
 
         --Facing up
     elseif player.PlayerExtra1 == 34 then
         player.CurrentFacingDirection = 3
-        player.Facing2 = 0
         player.AnimateID = 18
 
         --Facing left
     elseif player.PlayerExtra1 == 35 then
         player.CurrentFacingDirection = 1
-        player.Facing2 = 0
         player.AnimateID = 19
 
         --Facing right
     elseif player.PlayerExtra1 == 36 then
         player.CurrentFacingDirection = 2
-        player.Facing2 = 1
         player.AnimateID = 20
 
         --surf down
     elseif player.PlayerExtra1 == 37 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 4
         player.AnimateID = 21
 
         --surf up
     elseif player.PlayerExtra1 == 38 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 3
         player.AnimateID = 22
 
         --surf left
     elseif player.PlayerExtra1 == 39 then
-        player.Facing2 = 0
         player.CurrentFacingDirection = 1
         player.AnimateID = 23
 
         --surf right
     elseif player.PlayerExtra1 == 40 then
-        player.Facing2 = 1
         player.CurrentFacingDirection = 2
         player.AnimateID = 24
 
 
         --default position
     elseif player.PlayerExtra1 == 0 then
-        player.Facing2 = 0
         player.AnimateID = 255
 
     end
@@ -2281,7 +2237,7 @@ local function RenderPlayer(player, renderer)
 
     --Flip sprite if facing right
     local FacingTemp = 128
-    if player.Facing2 == 1 then
+    if player.CurrentFacingDirection == 2 then
         FacingTemp = 144
     else
         FacingTemp = 128
