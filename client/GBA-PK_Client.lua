@@ -1397,11 +1397,6 @@ end
 
 --- Update local variables with info from the emulator.
 local function GetPosition()
-    local Bike = emu:read16(33687112)
-    if Bike > 3000 then
-        Bike = Bike + BikeOffset
-    end
-    --Prev map
     LocalPlayerMapIDPrev = emu:read16(33813418)
     if LocalPlayerMapIDPrev == LocalPlayerMapID then
         LocalPlayerPreviousX = LocalPlayerCurrentX
@@ -1417,6 +1412,8 @@ local function GetPosition()
     LocalPlayerCurrentY = emu:read16(33779274)
     local PlayerAction  = emu:read8(33779284)
 
+    local Bike = emu:read16(33687112)
+    if Bike > 3000 then Bike = Bike + BikeOffset end
     local DecodedBikeAction   = FRLG.BikeDecoder[Bike]
     -- If no value could be read for the Bike, then don't try to decode it.
     if DecodedBikeAction == nil then return end
@@ -1425,56 +1422,11 @@ local function GetPosition()
     LocalPlayerMovementMethod = DecodedBikeAction[2]
 
     local DecodedMovement       = FRLG.MovementDecoder[LocalPlayerMovementMethod][PlayerAction]
-    LocalPlayerExtra1           = DecodedMovement[1]
-    LocalPlayerCurrentDirection = DecodedMovement[2]
+    LocalPlayerCurrentDirection = DecodedMovement[1]
+    LocalPlayerExtra1 = DecodedMovement[2 + ShouldDrawRemotePlayers]
 
-    if LocalPlayerMovementMethod == 2 then
-        if ShouldDrawRemotePlayers == 0 then
-            if LocalPlayerCurrentDirection == 4 then
-                LocalPlayerExtra1 = 33
-            end
-            if LocalPlayerCurrentDirection == 3 then
-                LocalPlayerExtra1 = 34
-            end
-            if LocalPlayerCurrentDirection == 1 then
-                LocalPlayerExtra1 = 35
-            end
-            if LocalPlayerCurrentDirection == 2 then
-                LocalPlayerExtra1 = 36
-            end
-        end
-    elseif LocalPlayerMovementMethod == 1 then
-        if ShouldDrawRemotePlayers == 0 then
-            if LocalPlayerCurrentDirection == 4 then
-                LocalPlayerExtra1 = 17
-            end
-            if LocalPlayerCurrentDirection == 3 then
-                LocalPlayerExtra1 = 18
-            end
-            if LocalPlayerCurrentDirection == 1 then
-                LocalPlayerExtra1 = 19
-            end
-            if LocalPlayerCurrentDirection == 2 then
-                LocalPlayerExtra1 = 20
-            end
-        end
-    else
-        if ShouldDrawRemotePlayers == 0 then
-            if LocalPlayerCurrentDirection == 4 then
-                LocalPlayerExtra1 = 1
-            end
-            if LocalPlayerCurrentDirection == 3 then
-                LocalPlayerExtra1 = 2
-            end
-            if LocalPlayerCurrentDirection == 1 then
-                LocalPlayerExtra1 = 3
-            end
-            if LocalPlayerCurrentDirection == 2 then
-                LocalPlayerExtra1 = 4
-            end
-        end
-        --	if Facing == 255 then PlayerExtra1 = 0 end
-    end
+    -- This was in a block for MovementMethod = MOVEMENT_ON_FOOT and ShouldDrawRemotePlayers == 1
+    -- if PlayerAction == 255 then PlayerExtra1 = 0 end
 end
 
 local function NoPlayersIfScreen()
