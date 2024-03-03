@@ -464,6 +464,8 @@ local function SendRawBattleData()
     SendToPlayer(PACKET_RAW_BATTLE_DATA, BattleVars[1] .. BattleVars[2] .. BattleVars[3] .. BattleVars[4] .. BattleVars[5] .. BattleVars[6] .. BattleVars[7] .. BattleVars[8] .. BattleVars[9] .. BattleVars[10])
 end
 
+-- Unused Networking functions -----------------------------------------------------------------------------------------
+
 local function SendRawLinkData(size)
     size = size or 0
     local SizeAct = size + 1000000000
@@ -471,7 +473,6 @@ local function SendRawLinkData(size)
     --		SizeAct = string.format("%.0f",SizeAct)
     SendToPlayer(PACKET_RAW_LINK_DATA, SizeAct)
 end
-
 
 local function SendMultiplayerPackets(Offset, size)
     local Packet = ""
@@ -574,7 +575,6 @@ local function ReceiveMultiplayerPackets(size)
         MultiplayerPacketSpace = MultiplayerPacketSpace + 1
     end
 end
-
 
 
 -- PLAYER RENDERING / ROM INTERACTION ----------------------------------------------------------------------------------
@@ -1495,12 +1495,14 @@ local function AnimatePlayerMovement(player)
     --11 = Face up
     --12 = Face left/right
 
+    -- On the first packet, just snap them to their positions
     if player.CurrentX == 0 then
         player.CurrentX = player.FutureX
     end
     if player.CurrentY == 0 then
         player.CurrentY = player.FutureY
     end
+
     local AnimateID = player.AnimateID
     local AnimationMovementX = player.FutureX - player.CurrentX
     local AnimationMovementY = player.FutureY - player.CurrentY

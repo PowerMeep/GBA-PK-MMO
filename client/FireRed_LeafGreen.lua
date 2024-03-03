@@ -1,13 +1,3 @@
---SpriteID means a sprite from the chart below
---1 = Side Left (Right must be set with facing variable)
---3 = Side Down
---2 = Side Up
---4-9 = Walking
---10-12 = Biking Idle Positions
---13-18 = Biking
---19-21 = Running Idle Positions
---22-27 = Running
---28-33 = Surfing stuff
 local Sprites = {
     -- Male Character
     [0] = {
@@ -223,56 +213,91 @@ local BikeDecoder = {
 -- Direction, Extra1 (overworld not visible), Extra1 (overworld visible)
 local MovementDecoder = {
     [2] = {
+        --Facing down
         [  0] = { 4, 33, 33},
+        --Facing up
         [  1] = { 3, 34, 34},
+        --Facing left
         [  2] = { 1, 35, 35},
+        --Facing right
         [  3] = { 2, 36, 36},
+        --surf down
         [ 29] = { 4, 33, 37},
+        --surf up
         [ 30] = { 3, 34, 38},
+        --surf left
         [ 31] = { 1, 35, 39},
+        --surf right
         [ 32] = { 2, 36, 40},
+        --Turning
         [ 41] = { 4, 33, 33},
         [ 42] = { 3, 34, 34},
         [ 43] = { 1, 35, 35},
         [ 44] = { 2, 36, 36},
+        --hitting a wall
         [ 33] = { 4, 33, 33},
         [ 34] = { 3, 34, 34},
         [ 35] = { 1, 35, 35},
         [ 36] = { 2, 36, 36},
+        --getting on pokemon
         [ 70] = { 4, 33, 37},
         [ 71] = { 3, 34, 38},
         [ 72] = { 1, 35, 39},
         [ 73] = { 2, 36, 40},
+        --getting off pokemon
         [166] = { 4, 33,  5},
         [167] = { 3, 34,  6},
         [168] = { 1, 35,  7},
         [169] = { 2, 36,  8},
+        --calling out pokemon
         [ 69] = { 4, 33, 33}
     },
     [1] = {
+        --bike face down
         [ 0] = { 4, 17, 17},
+        --bike face up
         [ 1] = { 3, 18, 18},
+        --bike face left
         [ 2] = { 1, 19, 19},
+        --bike face right
         [ 3] = { 2, 20, 20},
+        --bike move down
         [49] = { 4, 17, 21},
+        --bike move up
         [50] = { 3, 18, 22},
+        --bike move left
         [51] = { 1, 19, 23},
+        --bike move right
         [52] = { 2, 20, 24},
+        --bike fast move down
         [61] = { 4, 17, 25},
+        --bike fast move up
         [62] = { 3, 18, 26},
+        --bike fast move left
         [63] = { 1, 19, 27},
+        --bike fast move right
         [64] = { 2, 20, 28},
+        --bike hit wall down
         [37] = { 4, 17, 29},
+        --bike hit wall up
         [38] = { 3, 18, 30},
+        --bike hit wall left
         [39] = { 1, 19, 31},
+        --bike hit wall right
         [40] = { 2, 20, 32},
+        --calling out pokemon
         [69] = { 4, 17,  1}
     },
     [0] = {
+        --Facing down
         [ 0] = {4, 1,  1},
+        --Facing up
         [ 1] = {3, 2,  2},
+        --Facing left
         [ 2] = {1, 3,  3},
+        --Facing right
         [ 3] = {2, 4,  4},
+        --Hitting stuff
         [33] = {4, 1,  1},
         [34] = {3, 2,  2},
         [35] = {1, 3,  3},
@@ -281,22 +306,36 @@ local MovementDecoder = {
         [38] = {3, 2,  2},
         [39] = {1, 3,  3},
         [40] = {2, 4,  4},
+        --walk down
         [16] = {4, 1,  5},
+        --walk up
         [17] = {3, 2,  6},
+        --walk left
         [18] = {1, 3,  7},
+        --walk right
         [19] = {2, 4,  8},
+        --Jumping over route
         [20] = {4, 1, 13},
         [21] = {3, 2, 14},
         [22] = {1, 3, 15},
         [23] = {2, 4, 16},
+        --turn down
         [41] = {4, 1,  9},
+        --turn up
         [42] = {3, 2, 10},
+        --turn left
         [43] = {1, 3, 11},
+        --turn right
         [44] = {2, 4, 12},
+        --run down
         [61] = {4, 1, 13},
+        --run up
         [62] = {3, 2, 14},
+        --run left
         [63] = {1, 3, 15},
+        --run right
         [64] = {2, 4, 16},
+        --calling out pokemon
         [69] = {4, 1,  1}
     }
 }
