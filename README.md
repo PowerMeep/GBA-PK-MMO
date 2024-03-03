@@ -23,7 +23,12 @@ This may be preferable to you if you:
 
 
 ## The Client
-The client is composed of a config file, the main file, and another file housing a bunch of magic numbers.
+The client is composed of a few files.
+- Config.lua - This is where you set your name and the server you want to connect to.
+- Client.lua - This maintains connection with the server.
+- Pokemon.lua - This does all the reading and writing from memory and all the Pokemon-specific logic.
+- FireRed_LeafGreen.lua - This stores sprite data and other magic numbers used by the Pokemon script.
+- Utils.lua - This stores some basic functions for other scripts to use.
 
 ### How to Play
 Same as the original.
@@ -31,7 +36,7 @@ Same as the original.
 2. Put the client scripts in mGBA's `scripts` folder.
 3. Edit the `Config.lua` (See [Configuration](#Configuration))
 4. Run mGBA.
-5. Load the script.
+5. Load the `Client.lua` script.
 6. Open your legally ripped ROM file.
 
 ### Configuration
@@ -45,15 +50,6 @@ The host to connect to. Supports IPv4 and URLs.
 
 #### Port
 The port on the host to connect to.
-
-#### MaxRenderedPlayers
-If there are more players nearby than this number, then they'll just stay invisible until somebody leaves your line of sight. No big deal.
-However, for each extra player the script has to draw, it needs a little more of the GBA's memory.
-The original script supported 4, I've done a few tests with 8, and I saw a comment that suggests it might be able to go as high as 32.
-If the number of onscreen players is too high, it'll start to overwrite other important things in the GBA's memory, and that's generally undesirable.
-
-TLDR: The higher the number, the more likely something is to go wrong.
-
 
 ## The Server
 This is a dedicated server for the project, written in Python because I'm a lot more
