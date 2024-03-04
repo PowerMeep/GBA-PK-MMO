@@ -1,7 +1,7 @@
 # GBA PK MMO
 This project builds off of @TheHunterManX's work on https://github.com/TheHunterManX/GBA-PK-multiplayer.
 
-As of this commit, it is no longer _compatible_ with the scripts in the original repo.
+This is no longer _compatible_ with the scripts in the original repo.
 
 I'd also like to preface this README as well as the project as a whole with this warning - 
 I only reworked the client code. I do not understand the structure of the memory, the game data, what a lot of the numbers are doing,
@@ -157,27 +157,34 @@ This iteration will break backwards compatibility in favor of efficiency and sca
   - Duplicate packets can be squelched a given number of times.
   - The whole format might be replaceable with direction changes?
 
-### Milestone 3: Restructured Client
-I have a plan for how I want to rebuild the client that I think will make it a lot more reusable, both for GBA Pokemon games and possibly _other_ GBA games.
-I haven't come up with a detailed TODO list for this refactoring effort, though. The script is broken into three layers - Generic Client, Pokemon Logic, Magic Numbers.
 
-#### Generic Client
+### Milestone 3: Restructured Client
+The script is broken into three layers - Client, Logic, Magic Numbers.
+
+When the game starts, the Client loads the Logic, and the Logic loads the Magic Numbers.
+I think setting it up this way will make it a lot easier for contributors to add game modules for the games they want to see supported by this.
+
+#### Client
 This layer will house all the client stuff - Nickname, IP address, connection to server, pings and pongs - anything that would be true for any networked game.
+It checks the game cartridge on start and checks all the Logics it has for one that can match it. If one is found, then it will use that Logic for the session.
 
 This could, in theory, be reused for any game.
 
-#### Pokemon Logic
-This layer will house all the logic unique to the Pokemon titles - tracking of other player entities and their sprites, their interactions,
-grabbing the game state from the cartridge, etc.
+#### Logic
+This layer will house all the logic unique to the given game, tracking of other player entities and their sprites, 
+their interactions, grabbing the game state from the cartridge, etc.
+
+When the game is started, it loads the appropriate set of magic numbers (which may be different for different versions of the game)
+and uses them to interface with the ROM and memory data. This way, if multiple games share the same logic (as I suspect the Pokemon games will),
+but they use different numbers to interface with the memory, then the same Logic can just load the set of numbers it needs.
 
 #### Magic Numbers
-The term "Magic Numbers" here refers to all the memory addresses or binary payloads that allow the logic to interface with the game data.
+The term "Magic Numbers" here refers to all the memory addresses, binary payloads, or lookup tables that allow the logic to interface with the game data.
 So far, both FireRed and LeafGreen seem to use the same numbers in most situations, but there are a few differences here and there.
-I want to pull all these numbers into separate modules that either expose the numbers with readable names, or even expose entire function calls.
-The idea here is that the logic layer will identify which game is loaded, and then load the corresponding module it needs to communicate with that cartridge data.
-As of this commit, I've only gotten as far as extracting the FR/LG sprite data.
+These numbers into separate modules that either expose the numbers with readable names, or even expose entire function calls.
 
-I think setting it up this way will make it a lot easier for contributors to add game modules for the games they want to see supported by this.
+For example, it's possible that the existing Logic will support Ruby, Sapphire, and Emerald if we just give it the right numbers to work with.
+
 
 ### Miscellaneous / Polish
 These are all "nice-to-haves" that I didn't consider to be a priority, and I worked on them when it made sense to.
@@ -219,6 +226,11 @@ These are all "nice-to-haves" that I didn't consider to be a priority, and I wor
   - Might not be feasible.
   - Doing this safely requires a check on both the current and future positions.
   - What about another zone that allows lerping but still skips rendering?
+- [ ] Instead of sending packets on a timer, only send them when the player's state changes?
+  - I am X1, Y1, and I just started running to the LEFT.
+  - (No packets while running)
+  - I am now at X2, Y1, and I just stopped running.
+  - This may prevent them from being visible to new players while their state isn't changing. Perhaps keep a much slower timer, just in case?
 - [x] Separation of players from sprite render addresses (screenspace culling)
   - Rendering seems to be the primary limiting factor on maximum players.
   - Define safe "render" zones and allow players to use them on a FIFO basis
