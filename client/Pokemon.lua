@@ -13,7 +13,7 @@ local mod = {}
 local MAX_RENDERED_PLAYERS = 8
 
 --- Version number for this client script. Used to track compatibility with the server.
-local VERSION_NUMBER = 1017
+local VERSION_NUMBER = 1018
 
 --- Flip the gender of remote players. Used for debugging sprites.
 local DEBUG_GENDER_SWITCH = false
