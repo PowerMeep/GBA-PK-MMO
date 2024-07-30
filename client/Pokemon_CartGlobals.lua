@@ -43,45 +43,54 @@ DeltasByDirection = {
 --- Names for each individual character sprite
 PlayerSpriteLabels = {
     foot_idle_left   = 1,
-    foot_idle_up     = 2,
-    foot_idle_down   = 3,
-    walk_left_1      = 4,
-    walk_left_2      = 5,
-    walk_up_1        = 6,
-    walk_up_2        = 7,
+    walk_left_1      = 2,
+    walk_left_2      = 3,
+
+    foot_idle_up     = 4,
+    walk_up_1        = 5,
+    walk_up_2        = 6,
+
+    foot_idle_down   = 7,
     walk_down_1      = 8,
     walk_down_2      = 9,
+
     bike_idle_left   = 10,
-    bike_idle_up     = 11,
-    bike_idle_down   = 12,
-    bike_left_1      = 13,
-    bike_left_2      = 14,
-    bike_up_1        = 15,
-    bike_up_2        = 16,
+    bike_left_1      = 11,
+    bike_left_2      = 12,
+
+    bike_idle_up     = 13,
+    bike_up_1        = 14,
+    bike_up_2        = 15,
+
+    bike_idle_down   = 16,
     bike_down_1      = 17,
     bike_down_2      = 18,
+
     run_left_mid     = 19,
     run_left_1       = 20,
     run_left_2       = 21,
+
     run_up_mid       = 22,
     run_up_1         = 23,
     run_up_2         = 24,
+
     run_down_mid     = 25,
     run_down_1       = 26,
     run_down_2       = 27,
-    surf_sit_down    = 34,
-    surf_sit_up      = 35,
-    surf_sit_left    = 36
+
+    surf_sit_left    = 28,
+    surf_sit_up      = 29,
+    surf_sit_down    = 30,
 }
 
 SharedSpriteLabels = {
     battle_icon      = 1,
-    surf_idle_down_1 = 28,
-    surf_idle_up_1   = 29,
-    surf_idle_left_1 = 30,
-    surf_idle_down_2 = 31,
-    surf_idle_up_2   = 32,
-    surf_idle_left_2 = 33
+    surf_idle_left_1 = 2,
+    surf_idle_left_2 = 3,
+    surf_idle_up_1   = 4,
+    surf_idle_up_2   = 5,
+    surf_idle_down_1 = 6,
+    surf_idle_down_2 = 7,
 }
 
 --- The default sprite for each group and direction
