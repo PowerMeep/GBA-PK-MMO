@@ -210,133 +210,115 @@ local BikeDecoder = {
     [800] = BikeVal_FemaleSurfing
 }
 
--- Direction, Extra1 (overworld not visible), Extra1 (overworld visible), wall hit
+local Directions = {
+    left  = 1,
+    right = 2,
+    up    = 3,
+    down  = 4
+}
+
+-- Direction, Animation Index, Wall Hit
 local MovementDecoder = {
-    [2] = {
-        --Facing down
-        [  0] = { 4, 33, 33, 0},
-        --Facing up
-        [  1] = { 3, 34, 34, 0},
-        --Facing left
-        [  2] = { 1, 35, 35, 0},
-        --Facing right
-        [  3] = { 2, 36, 36, 0},
-        --surf down
-        [ 29] = { 4, 33, 37, 0},
-        --surf up
-        [ 30] = { 3, 34, 38, 0},
-        --surf left
-        [ 31] = { 1, 35, 39, 0},
-        --surf right
-        [ 32] = { 2, 36, 40, 0},
-        --Turning
-        [ 41] = { 4, 33, 33, 0},
-        [ 42] = { 3, 34, 34, 0},
-        [ 43] = { 1, 35, 35, 0},
-        [ 44] = { 2, 36, 36, 0},
-        --hitting a wall
-        [ 33] = { 4, 33, 33, 1},
-        [ 34] = { 3, 34, 34, 1},
-        [ 35] = { 1, 35, 35, 1},
-        [ 36] = { 2, 36, 36, 1},
-        --getting on pokemon
-        [ 70] = { 4, 33, 37, 0},
-        [ 71] = { 3, 34, 38, 0},
-        [ 72] = { 1, 35, 39, 0},
-        [ 73] = { 2, 36, 40, 0},
-        --getting off pokemon
-        [166] = { 4, 33,  5, 0},
-        [167] = { 3, 34,  6, 0},
-        [168] = { 1, 35,  7, 0},
-        [169] = { 2, 36,  8, 0},
-        --calling out pokemon
-        [ 69] = { 4, 33, 33, 0}
+    [0] = {
+        -- On Foot
+        -- Idle
+        [ 0] = {  Directions.down, 0, 0 },
+        [ 1] = {    Directions.up, 0, 0 },
+        [ 2] = {  Directions.left, 0, 0 },
+        [ 3] = { Directions.right, 0, 0 },
+        -- Walking
+        [16] = {  Directions.down, 1, 0 },
+        [17] = {    Directions.up, 1, 0 },
+        [18] = {  Directions.left, 1, 0 },
+        [19] = { Directions.right, 1, 0 },
+        -- Running
+        [61] = {  Directions.down, 2, 0 },
+        [62] = {    Directions.up, 2, 0 },
+        [63] = {  Directions.left, 2, 0 },
+        [64] = { Directions.right, 2, 0 },
+        -- Jumping
+        [20] = {  Directions.down, 3, 0 },
+        [21] = {    Directions.up, 3, 0 },
+        [22] = {  Directions.left, 3, 0 },
+        [23] = { Directions.right, 3, 0 },
+        -- Hitting a Wall
+        -- TODO: separate running from walking
+        [33] = {  Directions.down, 1, 1 },
+        [34] = {    Directions.up, 1, 1 },
+        [35] = {  Directions.left, 1, 1 },
+        [36] = { Directions.right, 1, 1 },
+        [37] = {  Directions.down, 2, 1 },
+        [38] = {    Directions.up, 2, 1 },
+        [39] = {  Directions.left, 2, 1 },
+        [40] = { Directions.right, 2, 1 },
+         -- Turning
+        [41] = {  Directions.down, 4, 0 },
+        [42] = {    Directions.up, 4, 0 },
+        [43] = {  Directions.left, 4, 0 },
+        [44] = { Directions.right, 4, 0 },
+       -- Calling out Pokemon
+        [69] = {  Directions.down, 0, 0 }
     },
     [1] = {
-        --bike face down
-        [ 0] = { 4, 17, 17, 0},
-        --bike face up
-        [ 1] = { 3, 18, 18, 0},
-        --bike face left
-        [ 2] = { 1, 19, 19, 0},
-        --bike face right
-        [ 3] = { 2, 20, 20, 0},
-        --bike move down
-        [49] = { 4, 17, 21, 0},
-        --bike move up
-        [50] = { 3, 18, 22, 0},
-        --bike move left
-        [51] = { 1, 19, 23, 0},
-        --bike move right
-        [52] = { 2, 20, 24, 0},
-        --bike fast move down
-        [61] = { 4, 17, 25, 0},
-        --bike fast move up
-        [62] = { 3, 18, 26, 0},
-        --bike fast move left
-        [63] = { 1, 19, 27, 0},
-        --bike fast move right
-        [64] = { 2, 20, 28, 0},
-        --bike hit wall down
-        [37] = { 4, 17, 29, 1},
-        --bike hit wall up
-        [38] = { 3, 18, 30, 1},
-        --bike hit wall left
-        [39] = { 1, 19, 31, 1},
-        --bike hit wall right
-        [40] = { 2, 20, 32, 1},
-        --calling out pokemon
-        [69] = { 4, 17,  1, 0}
+        -- Biking
+        -- Idle
+        [ 0] = {  Directions.down, 0, 0 },
+        [ 1] = {    Directions.up, 0, 0 },
+        [ 2] = {  Directions.left, 0, 0 },
+        [ 3] = { Directions.right, 0, 0 },
+        -- Moving
+        [49] = {  Directions.down, 1, 0 },
+        [50] = {    Directions.up, 1, 0 },
+        [51] = {  Directions.left, 1, 0 },
+        [52] = { Directions.right, 1, 0 },
+        -- Moving Fast
+        [61] = {  Directions.down, 2, 0 },
+        [62] = {    Directions.up, 2, 0 },
+        [63] = {  Directions.left, 2, 0 },
+        [64] = { Directions.right, 2, 0 },
+        -- Hitting a Wall
+        [37] = {  Directions.down, 3, 1 },
+        [38] = {    Directions.up, 3, 1 },
+        [39] = {  Directions.left, 3, 1 },
+        [40] = { Directions.right, 3, 1 },
+        -- TODO: Jumping
+        -- Calling out Pokemon
+        [69] = {  Directions.down, 0, 0 }
     },
-    [0] = {
-        --Facing down
-        [ 0] = {4, 1,  1, 0},
-        --Facing up
-        [ 1] = {3, 2,  2, 0},
-        --Facing left
-        [ 2] = {1, 3,  3, 0},
-        --Facing right
-        [ 3] = {2, 4,  4, 0},
-        --Hitting stuff
-        [33] = {4, 1,  1, 1},
-        [34] = {3, 2,  2, 1},
-        [35] = {1, 3,  3, 1},
-        [36] = {2, 4,  4, 1},
-        [37] = {4, 1,  1, 1},
-        [38] = {3, 2,  2, 1},
-        [39] = {1, 3,  3, 1},
-        [40] = {2, 4,  4, 1},
-        --walk down
-        [16] = {4, 1,  5, 0},
-        --walk up
-        [17] = {3, 2,  6, 0},
-        --walk left
-        [18] = {1, 3,  7, 0},
-        --walk right
-        [19] = {2, 4,  8, 0},
-        --Jumping over route
-        [20] = {4, 1, 13, 0},
-        [21] = {3, 2, 14, 0},
-        [22] = {1, 3, 15, 0},
-        [23] = {2, 4, 16, 0},
-        --turn down
-        [41] = {4, 1,  9, 0},
-        --turn up
-        [42] = {3, 2, 10, 0},
-        --turn left
-        [43] = {1, 3, 11, 0},
-        --turn right
-        [44] = {2, 4, 12, 0},
-        --run down
-        [61] = {4, 1, 13, 0},
-        --run up
-        [62] = {3, 2, 14, 0},
-        --run left
-        [63] = {1, 3, 15, 0},
-        --run right
-        [64] = {2, 4, 16, 0},
-        --calling out pokemon
-        [69] = {4, 1,  1, 0}
+    [2] = {
+        -- Surfing
+        -- Idle
+        [  0] = {  Directions.down, 0, 0 },
+        [  1] = {    Directions.up, 0, 0 },
+        [  2] = {  Directions.left, 0, 0 },
+        [  3] = { Directions.right, 0, 0 },
+        -- Moving
+        [ 29] = {  Directions.down, 1, 0 },
+        [ 30] = {    Directions.up, 1, 0 },
+        [ 31] = {  Directions.left, 1, 0 },
+        [ 32] = { Directions.right, 1, 0 },
+        -- Turning
+        [ 41] = {  Directions.down, 4, 0 },
+        [ 42] = {    Directions.up, 4, 0 },
+        [ 43] = {  Directions.left, 4, 0 },
+        [ 44] = { Directions.right, 4, 0 },
+        -- Hitting a Wall
+        [ 33] = {  Directions.down, 0, 1 },
+        [ 34] = {    Directions.up, 0, 1 },
+        [ 35] = {  Directions.left, 0, 1 },
+        [ 36] = { Directions.right, 0, 1 },
+        -- Mounting
+        [ 70] = {  Directions.down, 2, 0 },
+        [ 71] = {    Directions.up, 2, 0 },
+        [ 72] = {  Directions.left, 2, 0 },
+        [ 73] = { Directions.right, 2, 0 },
+        -- Dismounting
+        [166] = {  Directions.down, 3, 0 },
+        [167] = {    Directions.up, 3, 0 },
+        [168] = {  Directions.left, 3, 0 },
+        [169] = { Directions.right, 3, 0 },
+        -- Calling out pokemon
+        [ 69] = {  Directions.down, 0, 0 }
     }
 }
 

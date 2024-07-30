@@ -13,7 +13,7 @@ local mod = {}
 local MAX_RENDERED_PLAYERS = 8
 
 --- Version number for this client script. Used to track compatibility with the server.
-local VERSION_NUMBER = 1018
+local VERSION_NUMBER = 1019
 
 --- Flip the gender of remote players. Used for debugging sprites.
 local DEBUG_GENDER_SWITCH = false
@@ -113,15 +113,15 @@ local LocalPlayerPreviousY = 0
 -- This is the coordinate that the player entered this map on
 local LocalPlayerStartX = 0
 local LocalPlayerStartY = 0
--- TODO: figure out what this does and rename it
---- Something to do with sprites and animation.
---- This value correlates to a default standing pose.
-local LocalPlayerExtra1 = 2
---- Sprite Number (0 = Male, 1 = Female)
+--- Whether this player is male or female (0 = Male, 1 = Female)
 local LocalPlayerGender = 0
---- Player Movement Method (0 = Walking, 1 = Biking, 2 = Surfing)
+--- Whether this player is hitting a wall
+local LocalPlayerHittingWall = 0
+--- Animation Group (0 = Walking, 1 = Biking, 2 = Surfing)
 --- Used for some initial decoding and sent to other players, but doesn't seem to be used by other players.
-local LocalPlayerMovementMethod = 0
+local LocalPlayerAnimationGroup = 0
+--- The animation within the group that is currently playing
+local LocalPlayerAnimationIndex = 0
 --- Whether the player is in a battle (0 = No, 1 = Yes)
 local LocalPlayerIsInBattle = 0
 
@@ -1053,7 +1053,6 @@ local function NewPlayerProxy()
         RelativeX=0,
         RelativeY=0,
         CurrentFacingDirection=0,
-        FutureFacingDirection=0,
         --- The map this player is currently on
         CurrentMapID=0,
         --- The map this player was previously on
@@ -1061,16 +1060,15 @@ local function NewPlayerProxy()
         --- How the current map was entered
         --- Presumably used to determine visibility with the previous map
         MapEntranceType=1,
-        --- ???
-        --- - Used to determine the x offset in calculating visibility (bike starts further to the left)
-        --- - Used to determine the currently playing animation
-        --- - Used to check movement method and set offsets for rendering
-        --- - Padded to 3 characters in the packet
-        PlayerExtra1=0,
         --- Sprite Number (Male / Female)
         Gender=0,
         --- How this player is moving (Walking / Biking / Surfing)
-        MovementMethod=0,
+        AnimationGroup=0,
+        --- The animation within the group that is playing
+        --- with 0 being guaranteed as default / idle
+        AnimationIndex=0,
+        --- Whether this player is hitting a wall
+        HittingWall=0,
         --- Used to determine whether to draw the battle symbol
         IsInBattle=0,
         --- Whether this player could be visible to us
@@ -1088,10 +1086,10 @@ local function NewPlayerProxy()
         --- The main sprite to draw.
         --- - The surfing pokemon when surfing
         --- - The player sprite in other cases
-        SpriteID=0,
+        SpriteID1=3,
         --- The second sprite to draw.
         --- - The player sitting sprite when surfing.
-        SpriteID2=0,
+        SpriteID2=34,
         --- The ID for the currently playing animation
         --- Used to choose the current sprites as well as lerp positon
         AnimateID=0
@@ -1214,11 +1212,11 @@ local function _UpdatePlayerVisibility(player)
 
     -- Next, we check whether the player is within our screen space
     --This is for the bike + surf
-    if player.PlayerExtra1 >= 17 and player.PlayerExtra1 <= 40 then
+    if player.AnimationGroup ~= 0 then
         MinX = -8
     -- FIXME: never used. The range of 33-40 is completely within the range of 17-40
-    elseif player.PlayerExtra1 >= 33 and player.PlayerExtra1 <= 40 then
-        MinX = 8
+    -- elseif player.AnimationIndex >= 33 and player.AnimationIndex <= 40 then
+    --    MinX = 8
     else
         MinX = -16
     end
@@ -1236,29 +1234,18 @@ end
 --- The current implementation seems to iterate an animation frame number,
 --- and then update the `animation` position by a hardcoded amount on specific frames within the animation.
 --- When the `animation` position is a full tile from zero (>15, <-15), the position is updated by one tile in that direction.
----
---- Ultimately, a more general time-based interpolation might be more suitable and handle varying framerates a little better.
---- We know how much time elapses between packets, so all we need to do is interpolate from one packet's position to the next.
 local function _AnimatePlayerMovement(player)
-    -- TODO: optimization: Don't lerp sprites that are completely offscreen. Just update them directly.
+    -- Animate ID is a two-digit number, where each digit represents something specific
+    -- The first digit is the animation
+    -- - 0 = on foot
+    -- - 1 = on bike
+    -- - 2 = surfing
+    -- The second digit is the animation index within that group
+    -- - 0 represents the idle animation
 
-    --This is for updating the previous coords with new ones, without looking janky
-    --AnimateID List
-    --0 = Standing Still
-    --1 = Walking Down
-    --2 = Walking Up
-    --3 = Walking Left/Right
-    --4 = Running Down
-    --5 = Running Up
-    --6 = Running Left/Right
-    --7 = Bike Down
-    --8 = Bike Up
-    --9 = Bike left/right
-    --10 = Face down
-    --11 = Face up
-    --12 = Face left/right
+    -- FIXME: when the animation group or index changes, update the initial sprites
 
-    -- On the first packet, just snap them to their positions
+    -- On the first packet, just snap them to their new positions
     if player.CurrentX == 0 then
         player.CurrentX = player.FutureX
     end
@@ -1266,7 +1253,6 @@ local function _AnimatePlayerMovement(player)
         player.CurrentY = player.FutureY
     end
 
-    local AnimateID = player.AnimateID
     local AnimationMovementX = player.FutureX - player.CurrentX
     local AnimationMovementY = player.FutureY - player.CurrentY
 
@@ -1278,8 +1264,7 @@ local function _AnimatePlayerMovement(player)
     --Animate left movement
     if AnimationMovementX < 0 then
 
-        --Walk
-        if AnimateID == 3 then
+        if player.AnimateID == 01 then
             player.PlayerAnimationFrameMax = 14
             player.AnimationX = player.AnimationX - 1
             if player.PlayerAnimationFrame == 5 then
@@ -1297,11 +1282,9 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 1
             end
-            --Run
-        elseif AnimateID == 6 then
+        elseif player.AnimateID == 02 then
             player.PlayerAnimationFrameMax = 9
             player.AnimationX = player.AnimationX - 4
-            --	console:log("Frame: " .. PlayerAnimationFrame)
             if player.PlayerAnimationFrame > 5 then
                 if player.PlayerAnimationFrame2 == 0 then
                     player.SpriteID1 = 20
@@ -1311,8 +1294,7 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 19
             end
-            --Bike
-        elseif AnimateID == 9 then
+        elseif player.AnimateID == 11 then
             player.PlayerAnimationFrameMax = 6
             player.AnimationX = player.AnimationX + ((AnimationMovementX * 16) / 3)
             if player.PlayerAnimationFrame >= 1 and player.PlayerAnimationFrame < 5 then
@@ -1324,17 +1306,15 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 10
             end
-            --Surf
-        elseif AnimateID == 23 then
+        elseif player.AnimateID == 21 then
             player.PlayerAnimationFrameMax = 4
             player.AnimationX = player.AnimationX - 4
             player.SpriteID1 = 30
             player.SpriteID2 = 36
         end
 
-        --Animate right movement
     elseif AnimationMovementX > 0 then
-        if AnimateID == 13 then
+        if player.AnimateID == 01 then
             player.PlayerAnimationFrameMax = 14
             player.AnimationX = player.AnimationX + 1
             if player.PlayerAnimationFrame == 5 then
@@ -1352,7 +1332,7 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 1
             end
-        elseif AnimateID == 14 then
+        elseif player.AnimateID == 02 then
             player.PlayerAnimationFrameMax = 9
             player.AnimationX = player.AnimationX + 4
             if player.PlayerAnimationFrame > 5 then
@@ -1364,8 +1344,7 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 19
             end
-        elseif AnimateID == 15 then
-            --	console:log("Bike")
+        elseif player.AnimateID == 11 then
             player.PlayerAnimationFrameMax = 6
             player.AnimationX = player.AnimationX + ((AnimationMovementX * 16) / 3)
             if player.PlayerAnimationFrame >= 1 and player.PlayerAnimationFrame < 5 then
@@ -1377,8 +1356,7 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 10
             end
-            --Surf
-        elseif AnimateID == 24 then
+        elseif player.AnimateID == 21 then
             player.PlayerAnimationFrameMax = 4
             player.AnimationX = player.AnimationX + 4
             player.SpriteID1 = 30
@@ -1389,8 +1367,7 @@ local function _AnimatePlayerMovement(player)
     else
         player.AnimationX = 0
         player.CurrentX = player.FutureX
-        --Turn player left/right
-        if AnimateID == 12 then
+        if player.AnimateID == 04 then
             player.PlayerAnimationFrameMax = 8
             if player.PlayerAnimationFrame > 1 and player.PlayerAnimationFrame < 6 then
                 if player.PlayerAnimationFrame2 == 0 then
@@ -1401,24 +1378,11 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 1
             end
-            --If they are now equal
         end
-        --Surfing animation
-        if AnimateID == 19 then
+        -- Surfing animation left/right
+        if player.AnimateID == 20 then
             player.SpriteID2 = 36
-            if player.PreviousPlayerAnimation ~= 19 then
-                player.PlayerAnimationFrame2 = 0
-                player.PlayerAnimationFrame = 24
-            end
-            player.PlayerAnimationFrameMax = 48
-            if player.PlayerAnimationFrame2 == 0 then
-                player.SpriteID1 = 30
-            elseif player.PlayerAnimationFrame2 == 1 then
-                player.SpriteID1 = 33
-            end
-        elseif AnimateID == 20 then
-            player.SpriteID2 = 36
-            if player.PreviousPlayerAnimation ~= 20 then
+            if player.PreviousPlayerAnimation ~= player.AnimateID then
                 player.PlayerAnimationFrame2 = 0
                 player.PlayerAnimationFrame = 24
             end
@@ -1434,7 +1398,7 @@ local function _AnimatePlayerMovement(player)
 
     --Animate up movement
     if AnimationMovementY < 0 then
-        if AnimateID == 2 then
+        if player.AnimateID == 01 then
             player.PlayerAnimationFrameMax = 14
             player.AnimationY = player.AnimationY - 1
             if player.PlayerAnimationFrame == 5 then
@@ -1452,7 +1416,7 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 2
             end
-        elseif AnimateID == 5 then
+        elseif player.AnimateID == 02 then
             player.PlayerAnimationFrameMax = 9
             player.AnimationY = player.AnimationY - 4
             if player.PlayerAnimationFrame > 5 then
@@ -1464,7 +1428,7 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 22
             end
-        elseif AnimateID == 8 then
+        elseif player.AnimateID == 11 then
             player.PlayerAnimationFrameMax = 6
             player.AnimationY = player.AnimationY + ((AnimationMovementY * 16) / 3)
             if player.PlayerAnimationFrame >= 1 and player.PlayerAnimationFrame < 5 then
@@ -1476,17 +1440,15 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 11
             end
-            --Surf
-        elseif AnimateID == 22 then
+        elseif player.AnimateID == 21 then
             player.PlayerAnimationFrameMax = 4
             player.AnimationY = player.AnimationY - 4
             player.SpriteID1 = 29
             player.SpriteID2 = 35
         end
 
-        --Animate down movement
     elseif AnimationMovementY > 0 then
-        if AnimateID == 1 then
+        if player.AnimateID == 01 then
             player.PlayerAnimationFrameMax = 14
             player.AnimationY = player.AnimationY + 1
             if player.PlayerAnimationFrame == 5 then
@@ -1504,7 +1466,7 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 3
             end
-        elseif AnimateID == 4 then
+        elseif player.AnimateID == 02 then
             player.PlayerAnimationFrameMax = 9
             player.AnimationY = player.AnimationY + 4
             if player.PlayerAnimationFrame > 5 then
@@ -1516,7 +1478,7 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 25
             end
-        elseif AnimateID == 7 then
+        elseif player.AnimateID == 11 then
             player.PlayerAnimationFrameMax = 6
             player.AnimationY = player.AnimationY + ((AnimationMovementY * 16) / 3)
             if player.PlayerAnimationFrame >= 1 and player.PlayerAnimationFrame < 5 then
@@ -1528,100 +1490,79 @@ local function _AnimatePlayerMovement(player)
             else
                 player.SpriteID1 = 12
             end
-            --Surf
-        elseif AnimateID == 21 then
+        elseif player.AnimateID == 21 then
             player.PlayerAnimationFrameMax = 4
             player.AnimationY = player.AnimationY + 4
             player.SpriteID1 = 28
             player.SpriteID2 = 34
-            --If they are now equal
         end
     else
         player.AnimationY = 0
         player.CurrentY = player.FutureY
         --Turn player down
-        if AnimateID == 10 then
-            player.PlayerAnimationFrameMax = 8
-            if player.PlayerAnimationFrame > 1 and player.PlayerAnimationFrame < 6 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 8
+        if player.AnimateID == 04 then
+            if player.currentFacingDirection == 3 then
+                player.PlayerAnimationFrameMax = 8
+                if player.PlayerAnimationFrame > 1 and player.PlayerAnimationFrame < 6 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.SpriteID1 = 8
+                    else
+                        player.SpriteID1 = 9
+                    end
                 else
-                    player.SpriteID1 = 9
+                    player.SpriteID1 = 3
                 end
-            else
-                player.SpriteID1 = 3
-            end
-            --Turn player up
-
-        elseif AnimateID == 11 then
-            player.PlayerAnimationFrameMax = 8
-            if player.PlayerAnimationFrame > 1 and player.PlayerAnimationFrame < 6 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 6
+            elseif player.currentFacingDirection == 4 then
+                player.PlayerAnimationFrameMax = 8
+                if player.PlayerAnimationFrame > 1 and player.PlayerAnimationFrame < 6 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.SpriteID1 = 6
+                    else
+                        player.SpriteID1 = 7
+                    end
                 else
-                    player.SpriteID1 = 7
+                    player.SpriteID1 = 2
                 end
-            else
-                player.SpriteID1 = 2
             end
         else
             --		createChars(3,SpriteNumber)
         end
 
         --Surfing animation
-        if AnimateID == 17 then
-            player.SpriteID2 = 34
-            if player.PreviousPlayerAnimation ~= 17 then
-                player.PlayerAnimationFrame2 = 0
-                player.PlayerAnimationFrame = 24
-            end
-            player.PlayerAnimationFrameMax = 48
-            if player.PlayerAnimationFrame2 == 0 then
-                player.SpriteID1 = 28
-            elseif player.PlayerAnimationFrame2 == 1 then
-                player.SpriteID1 = 31
-            end
-        elseif AnimateID == 18 then
-            player.SpriteID2 = 35
-            if player.PreviousPlayerAnimation ~= 18 then
-                player.PlayerAnimationFrame2 = 0
-                player.PlayerAnimationFrame = 24
-            end
-            player.PlayerAnimationFrameMax = 48
-            if player.PlayerAnimationFrame2 == 0 then
-                player.SpriteID1 = 29
-            elseif player.PlayerAnimationFrame2 == 1 then
-                player.SpriteID1 = 32
+        if player.AnimateID == 20 then
+            if player.CurrentFacingDirection == 3 then
+                player.SpriteID2 = 34
+                if player.PreviousPlayerAnimation ~= 17 then
+                    player.PlayerAnimationFrame2 = 0
+                    player.PlayerAnimationFrame = 24
+                end
+                player.PlayerAnimationFrameMax = 48
+                if player.PlayerAnimationFrame2 == 0 then
+                    player.SpriteID1 = 28
+                elseif player.PlayerAnimationFrame2 == 1 then
+                    player.SpriteID1 = 31
+                end
+            elseif player.CurrentFacingDirection == 4 then
+                player.SpriteID2 = 35
+                if player.PreviousPlayerAnimation ~= 18 then
+                    player.PlayerAnimationFrame2 = 0
+                    player.PlayerAnimationFrame = 24
+                end
+                player.PlayerAnimationFrameMax = 48
+                if player.PlayerAnimationFrame2 == 0 then
+                    player.SpriteID1 = 29
+                elseif player.PlayerAnimationFrame2 == 1 then
+                    player.SpriteID1 = 32
+                end
             end
             --If they are now equal
         end
     end
 
-    if AnimateID == 251 then
+    if player.AnimationIndex == 0 then
         player.PlayerAnimationFrame = 0
         player.AnimationX = 0
         player.AnimationY = 0
-        player.CurrentX = player.FutureX
-        player.CurrentY = player.FutureY
-    elseif AnimateID == 252 then
-        player.PlayerAnimationFrame = 0
-        player.AnimationX = 0
-        player.AnimationY = 0
-        player.CurrentX = player.FutureX
-        player.CurrentY = player.FutureY
-    elseif AnimateID == 253 then
-        player.PlayerAnimationFrame = 0
-        player.AnimationX = 0
-        player.AnimationY = 0
-        player.CurrentX = player.FutureX
-        player.CurrentY = player.FutureY
-    elseif AnimateID == 254 then
-        player.PlayerAnimationFrame = 0
-        player.AnimationX = 0
-        player.AnimationY = 0
-        player.CurrentX = player.FutureX
-        player.CurrentY = player.FutureY
-    elseif AnimateID == 255 then
         player.CurrentX = player.FutureX
         player.CurrentY = player.FutureY
     end
@@ -1648,250 +1589,7 @@ local function _AnimatePlayerMovement(player)
         player.CurrentY = player.CurrentY - 1
         player.AnimationY = player.AnimationY + 16
     end
-    player.PreviousPlayerAnimation = AnimateID
-end
-
---- Parses received sprite data into local variables
---- Determine AnimationID
-local function _HandleSprites(player)
-    --Because handling images every time would become a hassle, this will automatically set the image of every player
-
-    --PlayerExtra 1 = Down Face
-    --PlayerExtra 2 = Up Face
-    --PlayerExtra 3 or 4 = Left/Right Face
-    --PlayerExtra 5 = Down Walk
-    --PlayerExtra 6 = Up Walk
-    --PlayerExtra 7 or 8 = Left/Right Walk
-    --PlayerExtra 9 = Down Turn
-    --PlayerExtra 10 = Up Turn
-    --PlayerExtra 11 or 12 = Left/Right Turn
-    --PlayerExtra 13 = Down Run
-    --PlayerExtra 14 = Up Run
-    --PlayerExtra 15 or 16 = Left/Right Run
-    --PlayerExtra 17 = Down Bike
-    --PlayerExtra 18 = Up Bike
-    --PlayerExtra 19 or 20 = Left/Right Bike
-    --Facing down
-
-    if player.PlayerExtra1 == 1 then
-        player.SpriteID1 = 3
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 251
-
-        --Facing up
-    elseif player.PlayerExtra1 == 2 then
-        player.SpriteID1 = 2
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 252
-
-        --Facing left
-    elseif player.PlayerExtra1 == 3 then
-        player.SpriteID1 = 1
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 253
-
-        --Facing right
-    elseif player.PlayerExtra1 == 4 then
-        player.SpriteID1 = 1
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 254
-
-        --walk down
-    elseif player.PlayerExtra1 == 5 then
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 1
-
-        --walk up
-    elseif player.PlayerExtra1 == 6 then
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 2
-
-        --walk left
-    elseif player.PlayerExtra1 == 7 then
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 3
-
-        --walk right
-    elseif player.PlayerExtra1 == 8 then
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 13
-
-        --turn down
-    elseif player.PlayerExtra1 == 9 then
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 10
-
-        --turn up
-    elseif player.PlayerExtra1 == 10 then
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 11
-
-        --turn left
-    elseif player.PlayerExtra1 == 11 then
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 12
-
-        --turn right
-    elseif player.PlayerExtra1 == 12 then
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 12
-
-        --run down
-    elseif player.PlayerExtra1 == 13 then
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 4
-
-        --run up
-    elseif player.PlayerExtra1 == 14 then
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 5
-
-        --run left
-    elseif player.PlayerExtra1 == 15 then
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 6
-
-        --run right
-    elseif player.PlayerExtra1 == 16 then
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 14
-
-        --bike face down
-    elseif player.PlayerExtra1 == 17 then
-        player.SpriteID1 = 12
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 251
-
-        --bike face up
-    elseif player.PlayerExtra1 == 18 then
-        player.SpriteID1 = 11
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 252
-
-        --bike face left
-    elseif player.PlayerExtra1 == 19 then
-        player.SpriteID1 = 10
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 253
-
-        --bike face right
-    elseif player.PlayerExtra1 == 20 then
-        player.SpriteID1 = 10
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 254
-
-        --bike move down
-    elseif player.PlayerExtra1 == 21 then
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 7
-
-        --bike move up
-    elseif player.PlayerExtra1 == 22 then
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 8
-
-        --bike move left
-    elseif player.PlayerExtra1 == 23 then
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 9
-
-        --bike move right
-    elseif player.PlayerExtra1 == 24 then
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 15
-
-        --bike fast move down
-    elseif player.PlayerExtra1 == 25 then
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 7
-
-        --bike fast move up
-    elseif player.PlayerExtra1 == 26 then
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 8
-
-        --bike fast move left
-    elseif player.PlayerExtra1 == 27 then
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 9
-
-        --bike fast move right
-    elseif player.PlayerExtra1 == 28 then
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 15
-
-        --bike hit wall down
-    elseif player.PlayerExtra1 == 29 then
-        player.SpriteID1 = 12
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 251
-
-        --bike hit wall up
-    elseif player.PlayerExtra1 == 30 then
-        player.SpriteID1 = 11
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 252
-
-        --bike hit wall left
-    elseif player.PlayerExtra1 == 31 then
-        player.SpriteID1 = 10
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 253
-
-        --bike hit wall right
-    elseif player.PlayerExtra1 == 32 then
-        player.SpriteID1 = 10
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 254
-
-        --Surfing
-
-        --Facing down
-    elseif player.PlayerExtra1 == 33 then
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 17
-
-        --Facing up
-    elseif player.PlayerExtra1 == 34 then
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 18
-
-        --Facing left
-    elseif player.PlayerExtra1 == 35 then
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 19
-
-        --Facing right
-    elseif player.PlayerExtra1 == 36 then
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 20
-
-        --surf down
-    elseif player.PlayerExtra1 == 37 then
-        player.CurrentFacingDirection = 4
-        player.AnimateID = 21
-
-        --surf up
-    elseif player.PlayerExtra1 == 38 then
-        player.CurrentFacingDirection = 3
-        player.AnimateID = 22
-
-        --surf left
-    elseif player.PlayerExtra1 == 39 then
-        player.CurrentFacingDirection = 1
-        player.AnimateID = 23
-
-        --surf right
-    elseif player.PlayerExtra1 == 40 then
-        player.CurrentFacingDirection = 2
-        player.AnimateID = 24
-
-
-        --default position
-    elseif player.PlayerExtra1 == 0 then
-        player.AnimateID = 255
-
-    end
+    player.PreviousPlayerAnimation = player.AnimateID
 end
 
 --- Calculate our screen space so we can determine which players are visible.
@@ -1964,28 +1662,28 @@ local function _RenderPlayer(player, renderer)
     local FacingTemp = 128
     if player.CurrentFacingDirection == 2 then
         FacingTemp = 144
-    else
-        FacingTemp = 128
     end
 
     -- Biking
-    if player.PlayerExtra1 >= 17 and player.PlayerExtra1 <= 32 then
+    -- FIXME: original range was not "all bike sprites"
+    if player.AnimationGroup == 1 then
         isBiking = 1
         FinalMapX = FinalMapX - 8
         WriteIntegerArrayToEmu(renderer.spriteDataAddress - 80, FRLG.Sprites[player.Gender][player.SpriteID1])
         WriteRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 0, renderer.spritePointerAddress, 0, 0)
 
     -- Surfing
-    elseif player.PlayerExtra1 >= 33 and player.PlayerExtra1 <= 40 then
+    -- FIXME: original range was not "all surfing sprites"
+    elseif player.AnimationGroup == 2 then
         isSurfing = 1
-        if player.PlayerAnimationFrame2 == 1 and player.PlayerExtra1 <= 36 then
+        if player.PlayerAnimationFrame2 == 1 and player.AnimationIndex <= 36 then
             FinalMapY = FinalMapY + 1
         end
         --Surfing char
         WriteIntegerArrayToEmu(renderer.spriteDataAddress + 512, FRLG.Sprites[player.Gender][player.SpriteID1])
         WriteRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 128, renderer.spritePointerAddress, 0, 0)
 
-        if player.PlayerAnimationFrame2 == 1 and player.PlayerExtra1 <= 36 then
+        if player.PlayerAnimationFrame2 == 1 and player.AnimationIndex <= 36 then
             FinalMapY = FinalMapY - 1
         end
         FinalMapX = FinalMapX - 8
@@ -2021,19 +1719,36 @@ end
 --- This parses the payload and updates the values for a remote player that we are tracking.
 local function _OnRemotePlayerUpdate(player, payload)
     -- Four free bytes
-    local x               = tonumber(string.sub(payload,  5,  8)) - 2000
-    local y               = tonumber(string.sub(payload,  9, 12)) - 2000
+    local x                       = tonumber(string.sub(payload,  5,  8)) - 2000
+    local y                       = tonumber(string.sub(payload,  9, 12)) - 2000
     -- Three free bytes
-    player.PlayerExtra1   = tonumber(string.sub(payload, 16, 18)) - 100
-    local gender          = tonumber(string.sub(payload, 19, 19))
-    player.MovementMethod = tonumber(string.sub(payload, 20, 20))
-    player.IsInBattle     = tonumber(string.sub(payload, 21, 21))
-    local map             = tonumber(string.sub(payload, 22, 27)) - 100000
-    local prevMap         = tonumber(string.sub(payload, 28, 33)) - 100000
-    local mapEntranceType = tonumber(string.sub(payload, 34, 34))
-    player.StartX         = tonumber(string.sub(payload, 35, 38)) - 2000
-    player.StartY         = tonumber(string.sub(payload, 39, 42)) - 2000
+    local animationGroup          = tonumber(string.sub(payload, 16, 16))
+    player.AnimationIndex         = tonumber(string.sub(payload, 17, 17))
+    player.CurrentFacingDirection = tonumber(string.sub(payload, 18, 18))
+    player.HittingWall            = tonumber(string.sub(payload, 19, 19))
+    local gender                  = tonumber(string.sub(payload, 20, 20))
+    player.IsInBattle             = tonumber(string.sub(payload, 21, 21))
+    local map                     = tonumber(string.sub(payload, 22, 27)) - 100000
+    local prevMap                 = tonumber(string.sub(payload, 28, 33)) - 100000
+    local mapEntranceType         = tonumber(string.sub(payload, 34, 34))
+    player.StartX                 = tonumber(string.sub(payload, 35, 38)) - 2000
+    player.StartY                 = tonumber(string.sub(payload, 39, 42)) - 2000
     -- One free byte
+
+    player.AnimateID = tonumber(string.sub(payload, 16, 17))
+
+    -- Set initial sprite on group change
+    -- TODO: take the facing direction into account as well
+    if animationGroup ~= player.AnimationGroup then
+        if animationGroup == 0 then
+            player.SpriteID1 = 3
+        elseif animationGroup == 1 then
+            player.SpriteID1 = 12
+        elseif animationGroup == 2 then
+            player.SpriteID1 = 28
+        end
+        player.AnimationGroup = animationGroup
+    end
 
     if player.CurrentMapID ~= map  then
         player.PlayerAnimationFrame = 0
@@ -2062,9 +1777,6 @@ local function _OnRemotePlayerUpdate(player, payload)
     else
         player.Gender = gender
     end
-
-    -- Determine current state from sprite
-    _HandleSprites(player)
 end
 
 -- GET CURRENT STATE ---------------------------------------------------------------------------------------------------
@@ -2209,28 +1921,34 @@ end
 --- Reads the currently displayed sprite and
 --- decodes it into more granular information.
 --- - Gender
---- - CurrentFacingDirection
---- - Animation
+--- - Facing Direction
+--- - Animation Group
+--- - Animation Index
+--- - Hitting a Wall
 local function _GetSpriteData()
-    local PlayerAction  = emu:read8(33779284)
-
-    -- Decode current sprite data
-    local Bike = emu:read16(33687112)
+    local PlayerAction = emu:read8(33779284)
+    local Bike         = emu:read16(33687112)
     if Bike > 3000 then Bike = Bike + BikeOffset end
     local DecodedBikeAction  = FRLG.BikeDecoder[Bike]
 
     if DecodedBikeAction ~= nil then
         LocalPlayerGender         = DecodedBikeAction[1]
-        LocalPlayerMovementMethod = DecodedBikeAction[2]
-        local DecodedMovement     = FRLG.MovementDecoder[LocalPlayerMovementMethod][PlayerAction]
+        LocalPlayerAnimationGroup = DecodedBikeAction[2]
+
+        -- Determine what animation represents this player right now
+        local DecodedMovement     = FRLG.MovementDecoder[LocalPlayerAnimationGroup][PlayerAction]
         if DecodedMovement ~= nil then
             LocalPlayerCurrentDirection = DecodedMovement[1]
-            LocalPlayerExtra1 = DecodedMovement[2 + ShouldDrawRemotePlayers]
+            LocalPlayerHittingWall      = DecodedMovement[3]
+
+            -- The specific animation changes based on whether the overworld is visible
+            -- 0 represents the default or "idle" animation within this group
+            if ShouldDrawRemotePlayers then LocalPlayerAnimationIndex = DecodedMovement[2] else LocalPlayerAnimationIndex = 0 end
         end
     end
 
-    -- This was in a block for MovementMethod = MOVEMENT_ON_FOOT and ShouldDrawRemotePlayers == 1
-    -- if PlayerAction == 255 then PlayerExtra1 = 0 end
+    -- This was in a block for AnimationGroup = MOVEMENT_ON_FOOT and ShouldDrawRemotePlayers == 1
+    -- if PlayerAction == 255 then AnimationIndex = 0 end
 end
 
 --- Checks the state of the screen for whether remote players would even be visible
@@ -2329,15 +2047,31 @@ local function GetStatePayload()
     Payload = Payload .. (LocalPlayerCurrentX + 2000)
     Payload = Payload .. (LocalPlayerCurrentY + 2000)
     Payload = Payload .. "000"
-    Payload = Payload .. (LocalPlayerExtra1 + 100)
+
+    -- Sprite and animation data
+    Payload = Payload .. LocalPlayerAnimationGroup
+    Payload = Payload .. LocalPlayerAnimationIndex
+    Payload = Payload .. LocalPlayerCurrentDirection
+    Payload = Payload .. LocalPlayerHittingWall
     Payload = Payload .. LocalPlayerGender
-    Payload = Payload .. LocalPlayerMovementMethod
+
+    -- Whether this player is in a battle
     Payload = Payload .. LocalPlayerIsInBattle
+
+    -- The map id of this player
     Payload = Payload .. (LocalPlayerMapID + 100000)
+
+    -- The previous map id of this player
     Payload = Payload .. (LocalPlayerMapIDPrev + 100000)
+
+    -- The method used to change maps
     Payload = Payload .. LocalPlayerMapEntranceType
+
+    -- The position this player entered this map from, used to calculate offsets
     Payload = Payload .. (LocalPlayerStartX + 2000)
     Payload = Payload .. (LocalPlayerStartY + 2000)
+
+    -- More padding
     Payload = Payload .. "0"
     return PACKET_PLAYER_UPDATE, Payload
 end
@@ -2654,8 +2388,8 @@ end
 --- Displayed in the console below connection information.
 local function GetStateForConsole()
     local out = "Nearby Players:"
-    for nick, _ in pairs(PlayerProxies) do
-        out = out .. nick .. "\n"
+    for nick, data in pairs(PlayerProxies) do
+        out = out .. nick .. "|" .. data.AnimationGroup .. ":" .. data.AnimationIndex .. ":" .. data.CurrentFacingDirection .. "|" .. data.Gender .. ":" .. tostring(data.SpriteID1) .. ":" .. tostring(data.SpriteID2) .. "\n"
     end
     return out
 end
