@@ -226,9 +226,30 @@ local ActionDecoder = {
     }
 }
 
+--- Used to apply a constant speed to moving players.
+--- Might be global across all GBA Pokemon titles?
+local SpeedsByAnimation = {
+    [AnimationGroups.on_foot] = {
+        [AnimationIndices.slow_move] = .06,
+        [AnimationIndices.jumping]   = .06,
+        [AnimationIndices.fast_move] = .12
+    },
+    [AnimationGroups.on_bike] = {
+        [AnimationIndices.jumping]   = .06,
+        [AnimationIndices.slow_move] = .16,
+        [AnimationIndices.fast_move] = .16
+    },
+    [AnimationGroups.surfing] = {
+        [AnimationIndices.jumping]   = .06,
+        [AnimationIndices.slow_move] = .12,
+        [AnimationIndices.fast_move] = .12
+    }
+}
+
 local mod = {}
 mod.PlayerSprites = PlayerSprites
 mod.SharedSprites = SharedSprites
 mod.BikeDecoder = BikeValDecoder
 mod.ActionDecoder = ActionDecoder
+mod.SpeedsByAnimation = SpeedsByAnimation
 return mod

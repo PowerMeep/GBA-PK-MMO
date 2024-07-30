@@ -32,6 +32,14 @@ Directions = {
     down  = 4
 }
 
+--- DX and DY
+DeltasByDirection = {
+    [Directions.up]    = { 0, -1},
+    [Directions.down]  = { 0,  1},
+    [Directions.left]  = {-1,  0},
+    [Directions.right] = { 1,  0},
+}
+
 --- Names for each individual character sprite
 PlayerSpriteLabels = {
     foot_idle_left   = 1,

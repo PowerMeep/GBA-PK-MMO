@@ -121,6 +121,8 @@ local LocalPlayerAnimationIndex = AnimationIndices.idle
 --- Whether the player is in a battle (0 = No, 1 = Yes)
 local LocalPlayerIsInBattle = 0
 
+--- The last position payload created by this client.
+local LastSposPayload = ""
 
 local Keypressholding = 0
 local LockFromScript = 0
@@ -1595,6 +1597,18 @@ local function _AnimatePlayerMovement(player)
     player.PreviousPlayerAnimation = player.AnimateID
 end
 
+
+local function _AnimatePlayerMovement2(player)
+    -- FIXME: this syncs position relatively well, but there's an initial "jump" whenever a new packet arrives
+    -- TODO: bring back the animations
+    local deltas = DeltasByDirection[player.CurrentFacingDirection]
+    local speed = FRLG.SpeedsByAnimation[player.AnimationGroup][player.AnimationIndex]
+    if speed == nil or player.HittingWall == 1 then speed = 0 end
+
+    player.CurrentX = player.CurrentX + (deltas[1] * speed)
+    player.CurrentY = player.CurrentY + (deltas[2] * speed)
+end
+
 --- Calculate our screen space so we can determine which players are visible.
 local function _CalculateCamera()
     --	console:log("Player X camera: " .. PlayerMapXMove .. "Player Y camera: " .. PlayerMapYMove)
@@ -1756,17 +1770,13 @@ local function _OnRemotePlayerUpdate(player, payload)
         -- Set the position of where they were last on their previous map
         player.PreviousX = player.CurrentX
         player.PreviousY = player.CurrentY
-        -- The future position and current position will be the same briefly
-        player.CurrentX = x
-        player.CurrentY = y
         -- A flag indicating that this player has recently changed maps
         player.MapChange = 1
 
         -- TODO: this would be a great place to update map offsets and/or relative positions
     end
-    -- Where the player should animate toward
-    player.FutureX = x
-    player.FutureY = y
+    player.CurrentX = x
+    player.CurrentY = y
 
     if DEBUG_GENDER_SWITCH then
         player.Gender = 1 - gender
@@ -2028,8 +2038,8 @@ local function IsSupported(GameCode)
     end
 end
 
---- Formats a payload to be received and parsed by other players.
-local function GetStatePayload()
+--- Get the animation and state data without the coordinates
+local function _GetPartialPayload()
     -- I'd rather this be on one line, but doing it this way
     -- makes it a lot easier to troubleshoot when one of these values is nil
     --
@@ -2039,10 +2049,7 @@ local function GetStatePayload()
     -- Starts with four unused bytes (might need to be numeric to preserve compatibility)
     -- Three unused bytes in the middle
     -- One unused byte at the end
-    local Payload = "1000"
-    Payload = Payload .. (LocalPlayerCurrentX + 2000)
-    Payload = Payload .. (LocalPlayerCurrentY + 2000)
-    Payload = Payload .. "000"
+    local Payload = ""
 
     -- Sprite and animation data
     Payload = Payload .. LocalPlayerAnimationGroup
@@ -2069,7 +2076,15 @@ local function GetStatePayload()
 
     -- More padding
     Payload = Payload .. "0"
-    return PACKET_PLAYER_UPDATE, Payload
+    return Payload
+end
+
+--- Formats a payload to be received and parsed by other players.
+local function GetStatePayload(PartialPayload)
+    if PartialPayload == nil then
+        PartialPayload = _GetPartialPayload()
+    end
+    return "1000" .. (LocalPlayerCurrentX + 2000) .. (LocalPlayerCurrentY + 2000) .. "000" .. PartialPayload
 end
 
 --- Called when a packet is received that is specific to the gameplay
@@ -2378,6 +2393,18 @@ local function UpdateGameState()
     _GetPosition()
     _GetSpriteData()
     _DoScriptUpdates()
+
+    local payload = _GetPartialPayload()
+    if payload ~= LastSposPayload then
+        if LastSposPayload ~= "" then
+            SendToServer(
+                PACKET_PLAYER_UPDATE,
+                GetStatePayload(payload)
+            )
+        end
+        LastSposPayload = payload
+    end
+
 end
 
 --- Returns a nice, readable string representation of the game's state.
@@ -2385,7 +2412,7 @@ end
 local function GetStateForConsole()
     local out = "Nearby Players:"
     for nick, data in pairs(PlayerProxies) do
-        out = out .. nick .. "|" .. data.AnimationGroup .. ":" .. data.AnimationIndex .. ":" .. data.CurrentFacingDirection .. "|" .. data.Gender .. ":" .. tostring(data.SurfSprite) .. ":" .. tostring(data.PlayerSprite) .. "\n"
+        out = out .. nick .. "|" .. data.AnimationGroup .. ":" .. data.AnimationIndex .. ":" .. data.CurrentFacingDirection .. ":" .. data.HittingWall .. "|" .. data.Gender .. ":" .. tostring(data.SurfSprite) .. ":" .. tostring(data.PlayerSprite) .. "\n"
     end
     return out
 end
@@ -2398,7 +2425,7 @@ local function Render()
         -- loop over players, updating their positions and rendering them
         for _, player in pairs(PlayerProxies) do
             -- Update player position based on animation id
-            _AnimatePlayerMovement(player)
+            _AnimatePlayerMovement2(player)
             -- Check whether the player is within the bounds of the camera
             _UpdatePlayerVisibility(player)
             if player.PlayerVis == 1 then

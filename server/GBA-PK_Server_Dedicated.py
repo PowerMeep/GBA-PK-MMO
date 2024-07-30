@@ -40,7 +40,7 @@ PACKET_TYPE_PING = 'GPOS'
 PACKET_TYPE_PONG = 'GPOS'
 
 # Deny reasons
-MIN_SUPPORTED_CLIENT_VERSION = 1015
+MIN_SUPPORTED_CLIENT_VERSION = 1019
 SUPPORTED_CHARS = re.compile('[a-zA-Z0-9._ -]+')
 PACKET_VAL_SERVER_FULL = 'FULL'
 PACKET_VAL_NAME_TAKEN  = 'NAME'
@@ -120,7 +120,7 @@ class Client:
                  sock: socket.socket,
                  addr):
         self.sock: socket.socket = sock
-        self.sock.settimeout(5)
+        self.sock.settimeout(10)
         self.addr = addr
         self.version = MIN_SUPPORTED_CLIENT_VERSION
         self.nick = '0000'
@@ -191,6 +191,7 @@ class Client:
         )
         clients_by_nick[self.nick] = self
         self.logger.warning(f'Adding client {self.addr} -> "{self.nick}"')
+        self.update_positions(packet)
         report()
         return True
 
@@ -226,46 +227,16 @@ class Client:
             self.logger.warning(packet)
             return
 
-        sender            = packet[0:8]
         recipient         = packet[8:16]
         packet_type       = packet[16:20]
         packet_val        = packet[20:24]
-        current_x         = packet[24:28]
-        current_y         = packet[28:32]
-        facing_2          = packet[32:35]
-        extra_1           = packet[35:38]
-        gender            = packet[38]
-        extra_3           = packet[39]
-        extra_4           = packet[40]
-        map_id            = packet[41:47]
-        map_id_prev       = packet[47:53]
-        map_entrance_type = packet[53]
-        start_x           = packet[54:58]
-        start_y           = packet[58:62]
+
         the_letter_u      = packet[63]
 
-        # self.logger.warning(f'{packet_type}')
+        self.logger.debug(packet)
+
         if packet_type == PACKET_TYPE_POS:
-            if map_id != self.map_id:
-
-                if self.map_id is not None:
-                    clients_by_map_id[self.map_id].remove(self)
-                    new_neighbors = set(walkable_exits_by_map_id.get(map_id, {}))
-                    new_neighbors.add(map_id)
-                    self.distribute_exit_to_neighbors(new_neighbors)
-                    add_possible_adjacency(map_id, self.map_id, map_entrance_type)
-
-                clients_by_map_id.setdefault(map_id, []).append(self)
-                self.map_id = map_id
-
-            if recipient == server_nick:
-                scrubbed_packet = packet
-            else:
-                scrubbed_packet = packet[:8] + server_nick + packet[16:]
-
-            self.last_spos = scrubbed_packet
-            self.distribute(scrubbed_packet)
-
+            self.update_positions(packet)
         elif packet_type == PACKET_TYPE_PONG:
             self.logger.debug('Received PONG')
             self.unresponded_pings = 0
@@ -273,6 +244,30 @@ class Client:
             clients_by_nick[recipient].send_raw(packet)
         else:
             self.logger.warning(packet)
+
+    def update_positions(self, packet):
+        map_id            = packet[41:47]
+        map_id_prev       = packet[47:53]
+        map_entrance_type = packet[53]
+        if map_id != self.map_id:
+
+            if self.map_id is not None:
+                clients_by_map_id[self.map_id].remove(self)
+                new_neighbors = set(walkable_exits_by_map_id.get(map_id, {}))
+                new_neighbors.add(map_id)
+                self.distribute_exit_to_neighbors(new_neighbors)
+                add_possible_adjacency(map_id, self.map_id, map_entrance_type)
+
+            clients_by_map_id.setdefault(map_id, []).append(self)
+            self.map_id = map_id
+
+            self.get_visible_players()
+
+        # Replace the "recipient" with the server_nick
+        scrubbed_packet = packet[:8] + server_nick + PACKET_TYPE_POS + packet[20:]
+
+        self.last_spos = scrubbed_packet
+        self.distribute(scrubbed_packet)
 
     def distribute(self, packet):
         """
@@ -290,6 +285,18 @@ class Client:
                 # May not be necessary. Further analysis needed.
                 modded_packet = packet[:8] + client.nick + packet[16:]
                 client.send_raw(modded_packet)
+
+    def get_visible_players(self):
+        neighbors = list(walkable_exits_by_map_id.get(self.map_id, {}))
+        neighbors.append(self.map_id)
+        for map_id in neighbors:
+            for client in list(clients_by_map_id.get(map_id, [])):
+                if client == self:
+                    continue
+                # Fudge that this packet is INTENDED for this recipient.
+                # May not be necessary. Further analysis needed.
+                modded_packet = client.last_spos[:8] + client.nick + client.last_spos[16:]
+                self.send_raw(modded_packet)
 
     def send_raw(self, message):
         try:

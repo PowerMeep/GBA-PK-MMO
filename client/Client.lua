@@ -38,8 +38,6 @@ local DENY_MALFORMED_PACKET     = "MALF"
 local SECONDS_UNTIL_TIMEOUT = 10
 --- The number of seconds in between each reconnect attempt
 local SECONDS_BETWEEN_RECONNECTS = 10
---- The number of seconds between sending position updates to the server
-local SECONDS_BETWEEN_POSITION_UPDATES = .1
 --- The number of seconds between updating the console
 local SECONDS_BETWEEN_CONSOLE_UPDATES = 1
 
@@ -48,29 +46,20 @@ local SECONDS_BETWEEN_CONSOLE_UPDATES = 1
 local LoadedGame
 --- The name of the server we connected to.
 local ServerName = "None"
---- The number of seconds that have passed since the session began.
---- Rounded down to a full integer.
-local SecondsSinceStart = 0
---- The previous value of SecondsSinceStart.
---- Used to trigger an update once per second, regardless of framerate.
-local PreviousSecondsSinceStart = 0
---- The amount of time since the previous frame.
---- Used to convert a frame-based update cycle into a realtime one.
+
+-- Timer variables
+-- When Current and Previous are different,
+-- then at least one full second has passed.
+local PreviousSeconds = 0
+local CurrentSeconds = 0
 local DeltaTime = 0
+
 --- Copy of the Nickname that has been formatted for sending in packets.
 local Nickname = ""
---- The time the session started.
-local TimeSessionStart = 0
 
 --- The socket used for communications with the server.
 local SocketMain = ""
---- The last position payload created by this client.
-local LastSposPayload = ""
---- How many identical position payloads to skip sending to the server.
---- After the timer is up, this will attempt to send every frame.
-local NumSposToSquelch = 120
---- How many identical position packets have been skipped.
-local SposSquelchCounter = 0
+
 --- A flag for the current connection status
 --- - a = not connected
 --- - c = connected as client
@@ -82,8 +71,6 @@ local ErrorMessage = ""
 local TimeoutTimer = 0
 --- Seconds remaining until the next reconnect attempt.
 local ReconnectTimer = 0
---- Seconds remaining until the next position packet to the server.
-local UpdatePositionTimer = 0
 --- Seconds remaining until the next time the console is updated
 local ConsoleUpdateTimer = 0
 
@@ -259,7 +246,7 @@ local function ConnectToServer()
     local success, _ = SocketMain:connect(Config.Host, Config.Port)
     if success then
         console:log("Joining game...")
-        SendData(PACKET_JOIN_SERVER, LoadedGame.Version .. LoadedGame.GameID)
+        SendData(PACKET_JOIN_SERVER, LoadedGame.Version .. LoadedGame.GameID, LoadedGame.GetStatePayload())
         SocketMain:add("received", OnDataReceived)
     else
         console:log("Could not connect to server.")
@@ -275,30 +262,11 @@ local function OnTimeout()
     LoadedGame.OnDisconnect()
 end
 
---- Gets current state from the loaded game.
---- Squelches it if it happens to be the same as it was last time to reduce traffic.
-local function SendPositionToServer()
-    local MessageType, Payload = LoadedGame.GetStatePayload()
-    if (Payload == LastSposPayload) and SposSquelchCounter < NumSposToSquelch then
-        SposSquelchCounter = SposSquelchCounter + 1
-    else
-        UpdatePositionTimer = UpdatePositionTimer + SECONDS_BETWEEN_POSITION_UPDATES
-        SposSquelchCounter = 0
-        LastSposPayload = Payload
-        SendToServer(MessageType, Payload)
-    end
-end
-
 --- Performs any timer-related functions.
 local function DoRealTimeUpdates()
     if TimeoutTimer > 0 then
         -- Connected
         TimeoutTimer = TimeoutTimer - DeltaTime
-        if UpdatePositionTimer > 0 then
-            UpdatePositionTimer = UpdatePositionTimer - DeltaTime
-        else
-            SendPositionToServer()
-        end
     elseif MasterClient == "c" then
         -- If I was previously connected, I have just timed out.
         OnTimeout()
@@ -327,15 +295,17 @@ local function OnFrameCompleted()
     if LoadedGame == nil then return end
 
     -- Calculate time difference from previous frame
-    SecondsSinceStart = os.clock() - TimeSessionStart
-    DeltaTime = SecondsSinceStart - PreviousSecondsSinceStart
-    PreviousSecondsSinceStart = SecondsSinceStart
+    CurrentSeconds = os.time()
+    DeltaTime = CurrentSeconds - PreviousSeconds
+    PreviousSeconds = CurrentSeconds
 
     -- Update the game state
     LoadedGame.UpdateGameState()
 
     -- Check timers; send updates to server
-    DoRealTimeUpdates()
+    if DeltaTime > 0 then
+        DoRealTimeUpdates()
+    end
 
     -- Update visuals
     LoadedGame.Render()
@@ -345,7 +315,7 @@ end
 --- Prepares the client code for the main loop.
 local function OnGameStart()
     console:log("A new game has started.")
-    TimeSessionStart = os.clock()
+    PreviousSeconds = os.time()
     local GameCode = emu:getGameCode()
     for _, Game in pairs(SUPPORTED_GAMES) do
         if Game.IsSupported(GameCode) then
