@@ -1243,8 +1243,6 @@ local function _AnimatePlayerMovement(player)
     -- The second digit is the animation index within that group
     -- - 0 represents the idle animation
 
-    -- FIXME: when the animation group or index changes, update the initial sprites
-
     -- On the first packet, just snap them to their new positions
     if player.CurrentX == 0 then
         player.CurrentX = player.FutureX
@@ -1738,15 +1736,8 @@ local function _OnRemotePlayerUpdate(player, payload)
     player.AnimateID = tonumber(string.sub(payload, 16, 17))
 
     -- Set initial sprite on group change
-    -- TODO: take the facing direction into account as well
     if animationGroup ~= player.AnimationGroup then
-        if animationGroup == 0 then
-            player.SpriteID1 = 3
-        elseif animationGroup == 1 then
-            player.SpriteID1 = 12
-        elseif animationGroup == 2 then
-            player.SpriteID1 = 28
-        end
+        player.SpriteID1 = FRLG.InitialSpritesByGroupAndDirection[animationGroup][player.CurrentFacingDirection]
         player.AnimationGroup = animationGroup
     end
 
