@@ -96,11 +96,7 @@ local LocalPlayerMapChange = 0
 --- The direction the local player is facing.
 --- Initialize to up, because it conveys to other players that you might not
 --- quite be ready yet.
---- - 1 = LEFT
---- - 2 = RIGHT
---- - 3 = UP
---- - 4 = DOWN
-local LocalPlayerCurrentDirection = 3
+local LocalPlayerCurrentDirection = Directions.up
 -- ??? This may represent the offset of the current map to the previous.
 local LocalPlayerDifferentMapX = 0
 local LocalPlayerDifferentMapY = 0
@@ -114,14 +110,14 @@ local LocalPlayerPreviousY = 0
 local LocalPlayerStartX = 0
 local LocalPlayerStartY = 0
 --- Whether this player is male or female (0 = Male, 1 = Female)
-local LocalPlayerGender = 0
+local LocalPlayerGender = Genders.male
 --- Whether this player is hitting a wall
 local LocalPlayerHittingWall = 0
 --- Animation Group (0 = Walking, 1 = Biking, 2 = Surfing)
 --- Used for some initial decoding and sent to other players, but doesn't seem to be used by other players.
-local LocalPlayerAnimationGroup = 0
+local LocalPlayerAnimationGroup = AnimationGroups.on_foot
 --- The animation within the group that is currently playing
-local LocalPlayerAnimationIndex = 0
+local LocalPlayerAnimationIndex = AnimationIndices.idle
 --- Whether the player is in a battle (0 = No, 1 = Yes)
 local LocalPlayerIsInBattle = 0
 
@@ -1052,7 +1048,7 @@ local function NewPlayerProxy()
         DifferentMapY=0,
         RelativeX=0,
         RelativeY=0,
-        CurrentFacingDirection=0,
+        CurrentFacingDirection=Directions.up,
         --- The map this player is currently on
         CurrentMapID=0,
         --- The map this player was previously on
@@ -1083,13 +1079,8 @@ local function NewPlayerProxy()
         --- The number of frames in this animation
         PlayerAnimationFrameMax=0,
         PreviousPlayerAnimation=0,
-        --- The main sprite to draw.
-        --- - The surfing pokemon when surfing
-        --- - The player sprite in other cases
-        SpriteID1=3,
-        --- The second sprite to draw.
-        --- - The player sitting sprite when surfing.
-        SpriteID2=34,
+        SurfSprite=SharedSpriteLabels.surf_idle_down_1,
+        PlayerSprite=PlayerSpriteLabels.foot_idle_down,
         --- The ID for the currently playing animation
         --- Used to choose the current sprites as well as lerp positon
         AnimateID=0
@@ -1262,133 +1253,140 @@ local function _AnimatePlayerMovement(player)
     --Animate left movement
     if AnimationMovementX < 0 then
 
-        if player.AnimateID == 01 then
-            player.PlayerAnimationFrameMax = 14
-            player.AnimationX = player.AnimationX - 1
-            if player.PlayerAnimationFrame == 5 then
+        if player.AnimationGroup == AnimationGroups.on_foot then
+            if player.AnimationIndex == AnimationIndices.slow_move then
+                player.PlayerAnimationFrameMax = 14
                 player.AnimationX = player.AnimationX - 1
-            end
-            if player.PlayerAnimationFrame == 9 then
-                player.AnimationX = player.AnimationX - 1
-            end
-            if player.PlayerAnimationFrame >= 3 and player.PlayerAnimationFrame <= 11 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 4
-                else
-                    player.SpriteID1 = 5
+                if player.PlayerAnimationFrame == 5 then
+                    player.AnimationX = player.AnimationX - 1
                 end
-            else
-                player.SpriteID1 = 1
-            end
-        elseif player.AnimateID == 02 then
-            player.PlayerAnimationFrameMax = 9
-            player.AnimationX = player.AnimationX - 4
-            if player.PlayerAnimationFrame > 5 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 20
-                else
-                    player.SpriteID1 = 21
+                if player.PlayerAnimationFrame == 9 then
+                    player.AnimationX = player.AnimationX - 1
                 end
-            else
-                player.SpriteID1 = 19
+                if player.PlayerAnimationFrame >= 3 and player.PlayerAnimationFrame <= 11 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.PlayerSprite = PlayerSpriteLabels.walk_left_1
+                    else
+                        player.PlayerSprite = PlayerSpriteLabels.walk_left_2
+                    end
+                else
+                    player.PlayerSprite = PlayerSpriteLabels.foot_idle_left
+                end
+            elseif player.AnimationIndex == AnimationIndices.fast_move then
+                player.PlayerAnimationFrameMax = 9
+                player.AnimationX = player.AnimationX - 4
+                if player.PlayerAnimationFrame > 5 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.PlayerSprite = PlayerSpriteLabels.run_left_1
+                    else
+                        player.PlayerSprite = PlayerSpriteLabels.run_left_2
+                    end
+                else
+                    player.PlayerSprite = PlayerSpriteLabels.run_left_mid
+                end
+
             end
-        elseif player.AnimateID == 11 then
+        elseif player.AnimationGroup == AnimationGroups.on_bike and
+                (player.AnimationIndex == AnimationIndices.slow_move or player.AnimationIndex == AnimationIndices.fast_move) then
             player.PlayerAnimationFrameMax = 6
             player.AnimationX = player.AnimationX + ((AnimationMovementX * 16) / 3)
             if player.PlayerAnimationFrame >= 1 and player.PlayerAnimationFrame < 5 then
                 if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 13
+                    player.PlayerSprite = PlayerSpriteLabels.bike_left_1
                 else
-                    player.SpriteID1 = 14
+                    player.PlayerSprite = PlayerSpriteLabels.bike_left_2
                 end
             else
-                player.SpriteID1 = 10
+                player.PlayerSprite = PlayerSpriteLabels.bike_idle_left
             end
-        elseif player.AnimateID == 21 then
+        elseif player.AnimationGroup == AnimationGroups.surfing and player.AnimationIndex == AnimationIndices.slow_move then
             player.PlayerAnimationFrameMax = 4
             player.AnimationX = player.AnimationX - 4
-            player.SpriteID1 = 30
-            player.SpriteID2 = 36
+            player.SurfSprite = SharedSpriteLabels.surf_idle_left_1
+            player.PlayerSprite = PlayerSpriteLabels.surf_sit_left
         end
 
     elseif AnimationMovementX > 0 then
-        if player.AnimateID == 01 then
-            player.PlayerAnimationFrameMax = 14
-            player.AnimationX = player.AnimationX + 1
-            if player.PlayerAnimationFrame == 5 then
+        if player.AnimationGroup == AnimationGroups.on_foot then
+            if player.AnimationIndex == AnimationIndices.slow_move then
+                player.PlayerAnimationFrameMax = 14
                 player.AnimationX = player.AnimationX + 1
-            end
-            if player.PlayerAnimationFrame == 9 then
-                player.AnimationX = player.AnimationX + 1
-            end
-            if player.PlayerAnimationFrame >= 3 and player.PlayerAnimationFrame <= 11 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 4
-                else
-                    player.SpriteID1 = 5
+                if player.PlayerAnimationFrame == 5 then
+                    player.AnimationX = player.AnimationX + 1
                 end
-            else
-                player.SpriteID1 = 1
-            end
-        elseif player.AnimateID == 02 then
-            player.PlayerAnimationFrameMax = 9
-            player.AnimationX = player.AnimationX + 4
-            if player.PlayerAnimationFrame > 5 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 20
-                else
-                    player.SpriteID1 = 21
+                if player.PlayerAnimationFrame == 9 then
+                    player.AnimationX = player.AnimationX + 1
                 end
-            else
-                player.SpriteID1 = 19
+                if player.PlayerAnimationFrame >= 3 and player.PlayerAnimationFrame <= 11 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.PlayerSprite = PlayerSpriteLabels.walk_left_1
+                    else
+                        player.PlayerSprite = PlayerSpriteLabels.walk_left_2
+                    end
+                else
+                    player.PlayerSprite = PlayerSpriteLabels.foot_idle_left
+                end
+            elseif player.AnimationIndex == AnimationIndices.fast_move then
+                player.PlayerAnimationFrameMax = 9
+                player.AnimationX = player.AnimationX + 4
+                if player.PlayerAnimationFrame > 5 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.PlayerSprite = PlayerSpriteLabels.run_left_1
+                    else
+                        player.PlayerSprite = PlayerSpriteLabels.run_left_2
+                    end
+                else
+                    player.PlayerSprite = PlayerSpriteLabels.run_left_mid
+                end
             end
-        elseif player.AnimateID == 11 then
+        elseif player.AnimationGroup == AnimationGroups.on_bike and
+                (player.AnimationIndex == AnimationIndices.slow_move or player.AnimationIndex == AnimationIndices.fast_move) then
             player.PlayerAnimationFrameMax = 6
             player.AnimationX = player.AnimationX + ((AnimationMovementX * 16) / 3)
             if player.PlayerAnimationFrame >= 1 and player.PlayerAnimationFrame < 5 then
                 if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 13
+                    player.PlayerSprite = PlayerSpriteLabels.bike_left_1
                 else
-                    player.SpriteID1 = 14
+                    player.PlayerSprite = PlayerSpriteLabels.bike_left_2
                 end
             else
-                player.SpriteID1 = 10
+                player.PlayerSprite = PlayerSpriteLabels.bike_idle_left
             end
-        elseif player.AnimateID == 21 then
+        elseif player.AnimationGroup == AnimationGroups.surfing and player.AnimationIndex == AnimationIndices.slow_move then
             player.PlayerAnimationFrameMax = 4
             player.AnimationX = player.AnimationX + 4
-            player.SpriteID1 = 30
-            player.SpriteID2 = 36
+            player.SurfSprite = SharedSpriteLabels.surf_idle_left_1
+            player.PlayerSprite = PlayerSpriteLabels.surf_sit_left
         else
 
         end
     else
         player.AnimationX = 0
         player.CurrentX = player.FutureX
-        if player.AnimateID == 04 then
+        if player.AnimationGroup == AnimationGroups.on_foot and player.AnimationIndex == AnimationIndices.turning then
             player.PlayerAnimationFrameMax = 8
             if player.PlayerAnimationFrame > 1 and player.PlayerAnimationFrame < 6 then
                 if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 4
+                    player.PlayerSprite = PlayerSpriteLabels.walk_left_1
                 else
-                    player.SpriteID1 = 5
+                    player.PlayerSprite = PlayerSpriteLabels.walk_left_2
                 end
             else
-                player.SpriteID1 = 1
+                player.PlayerSprite = PlayerSpriteLabels.foot_idle_left
             end
         end
         -- Surfing animation left/right
-        if player.AnimateID == 20 then
-            player.SpriteID2 = 36
+        if player.AnimationGroup == AnimationGroups.surfing and player.AnimationIndex == AnimationIndices.idle then
+            player.PlayerSprite = PlayerSpriteLabels.surf_sit_left
             if player.PreviousPlayerAnimation ~= player.AnimateID then
                 player.PlayerAnimationFrame2 = 0
                 player.PlayerAnimationFrame = 24
             end
             player.PlayerAnimationFrameMax = 48
             if player.PlayerAnimationFrame2 == 0 then
-                player.SpriteID1 = 30
+                player.SurfSprite = SharedSpriteLabels.surf_idle_left_1
             elseif player.PlayerAnimationFrame2 == 1 then
-                player.SpriteID1 = 33
+                player.SurfSprite = SharedSpriteLabels.surf_idle_left_2
             end
         end
     end
@@ -1396,130 +1394,136 @@ local function _AnimatePlayerMovement(player)
 
     --Animate up movement
     if AnimationMovementY < 0 then
-        if player.AnimateID == 01 then
-            player.PlayerAnimationFrameMax = 14
-            player.AnimationY = player.AnimationY - 1
-            if player.PlayerAnimationFrame == 5 then
+        if player.AnimationGroup == AnimationGroups.on_foot then
+            if player.AnimationIndex == AnimationIndices.slow_move then
+                player.PlayerAnimationFrameMax = 14
                 player.AnimationY = player.AnimationY - 1
-            end
-            if player.PlayerAnimationFrame == 9 then
-                player.AnimationY = player.AnimationY - 1
-            end
-            if player.PlayerAnimationFrame >= 3 and player.PlayerAnimationFrame <= 11 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 6
-                else
-                    player.SpriteID1 = 7
+                if player.PlayerAnimationFrame == 5 then
+                    player.AnimationY = player.AnimationY - 1
                 end
-            else
-                player.SpriteID1 = 2
-            end
-        elseif player.AnimateID == 02 then
-            player.PlayerAnimationFrameMax = 9
-            player.AnimationY = player.AnimationY - 4
-            if player.PlayerAnimationFrame > 5 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 23
-                else
-                    player.SpriteID1 = 24
+                if player.PlayerAnimationFrame == 9 then
+                    player.AnimationY = player.AnimationY - 1
                 end
-            else
-                player.SpriteID1 = 22
+                if player.PlayerAnimationFrame >= 3 and player.PlayerAnimationFrame <= 11 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.PlayerSprite = PlayerSpriteLabels.walk_up_1
+                    else
+                        player.PlayerSprite = PlayerSpriteLabels.walk_up_2
+                    end
+                else
+                    player.PlayerSprite = PlayerSpriteLabels.foot_idle_up
+                end
+            elseif player.AnimationIndex == AnimationIndices.fast_move then
+                player.PlayerAnimationFrameMax = 9
+                player.AnimationY = player.AnimationY - 4
+                if player.PlayerAnimationFrame > 5 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.PlayerSprite = PlayerSpriteLabels.run_up_1
+                    else
+                        player.PlayerSprite = PlayerSpriteLabels.run_up_2
+                    end
+                else
+                    player.PlayerSprite = PlayerSpriteLabels.run_up_mid
+                end
             end
-        elseif player.AnimateID == 11 then
+        elseif player.AnimationGroup == AnimationGroups.on_bike and
+                (player.AnimationIndex == AnimationIndices.slow_move or player.AnimationIndex == AnimationIndices.fast_move) then
             player.PlayerAnimationFrameMax = 6
             player.AnimationY = player.AnimationY + ((AnimationMovementY * 16) / 3)
             if player.PlayerAnimationFrame >= 1 and player.PlayerAnimationFrame < 5 then
                 if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 15
+                    player.PlayerSprite = PlayerSpriteLabels.bike_up_1
                 else
-                    player.SpriteID1 = 16
+                    player.PlayerSprite = PlayerSpriteLabels.bike_up_2
                 end
             else
-                player.SpriteID1 = 11
+                player.PlayerSprite = PlayerSpriteLabels.bike_idle_up
             end
-        elseif player.AnimateID == 21 then
+        elseif player.AnimationGroup == AnimationGroups.surfing and player.AnimationIndex == AnimationIndices.slow_move then
             player.PlayerAnimationFrameMax = 4
             player.AnimationY = player.AnimationY - 4
-            player.SpriteID1 = 29
-            player.SpriteID2 = 35
+            player.SurfSprite = SharedSpriteLabels.surf_idle_up_1
+            player.PlayerSprite = PlayerSpriteLabels.surf_sit_up
         end
 
     elseif AnimationMovementY > 0 then
-        if player.AnimateID == 01 then
-            player.PlayerAnimationFrameMax = 14
-            player.AnimationY = player.AnimationY + 1
-            if player.PlayerAnimationFrame == 5 then
+        if player.AnimationGroup == AnimationGroups.on_foot then
+            if player.AnimationIndex == AnimationIndices.slow_move then
+                player.PlayerAnimationFrameMax = 14
                 player.AnimationY = player.AnimationY + 1
-            end
-            if player.PlayerAnimationFrame == 9 then
-                player.AnimationY = player.AnimationY + 1
-            end
-            if player.PlayerAnimationFrame >= 3 and player.PlayerAnimationFrame <= 11 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 8
-                else
-                    player.SpriteID1 = 9
+                if player.PlayerAnimationFrame == 5 then
+                    player.AnimationY = player.AnimationY + 1
                 end
-            else
-                player.SpriteID1 = 3
-            end
-        elseif player.AnimateID == 02 then
-            player.PlayerAnimationFrameMax = 9
-            player.AnimationY = player.AnimationY + 4
-            if player.PlayerAnimationFrame > 5 then
-                if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 26
-                else
-                    player.SpriteID1 = 27
+                if player.PlayerAnimationFrame == 9 then
+                    player.AnimationY = player.AnimationY + 1
                 end
-            else
-                player.SpriteID1 = 25
+                if player.PlayerAnimationFrame >= 3 and player.PlayerAnimationFrame <= 11 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.PlayerSprite = PlayerSpriteLabels.walk_down_1
+                    else
+                        player.PlayerSprite = PlayerSpriteLabels.walk_down_2
+                    end
+                else
+                    player.PlayerSprite = PlayerSpriteLabels.foot_idle_down
+                end
+            elseif player.AnimationIndex == AnimationIndices.fast_move then
+                player.PlayerAnimationFrameMax = 9
+                player.AnimationY = player.AnimationY + 4
+                if player.PlayerAnimationFrame > 5 then
+                    if player.PlayerAnimationFrame2 == 0 then
+                        player.PlayerSprite = PlayerSpriteLabels.run_down_1
+                    else
+                        player.PlayerSprite = PlayerSpriteLabels.run_down_2
+                    end
+                else
+                    player.PlayerSprite = PlayerSpriteLabels.run_down_mid
+                end
             end
-        elseif player.AnimateID == 11 then
+        elseif player.AnimationGroup == AnimationGroups.on_bike and
+                (player.AnimationIndex == AnimationIndices.slow_move or player.AnimationIndex == AnimationIndices.fast_move) then
             player.PlayerAnimationFrameMax = 6
             player.AnimationY = player.AnimationY + ((AnimationMovementY * 16) / 3)
             if player.PlayerAnimationFrame >= 1 and player.PlayerAnimationFrame < 5 then
                 if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 17
+                    player.PlayerSprite = PlayerSpriteLabels.bike_down_1
                 else
-                    player.SpriteID1 = 18
+                    player.PlayerSprite = PlayerSpriteLabels.bike_down_2
                 end
             else
-                player.SpriteID1 = 12
+                player.PlayerSprite = PlayerSpriteLabels.bike_idle_down
             end
-        elseif player.AnimateID == 21 then
+        elseif player.AnimationGroup == AnimationGroups.surfing and player.AnimationIndex == AnimationIndices.slow_move then
             player.PlayerAnimationFrameMax = 4
             player.AnimationY = player.AnimationY + 4
-            player.SpriteID1 = 28
-            player.SpriteID2 = 34
+            player.SurfSprite = SharedSpriteLabels.surf_idle_down_1
+            player.PlayerSprite = PlayerSpriteLabels.surf_sit_down
         end
     else
         player.AnimationY = 0
         player.CurrentY = player.FutureY
         --Turn player down
-        if player.AnimateID == 04 then
-            if player.currentFacingDirection == 3 then
+        if player.AnimationGroup == AnimationGroups.on_foot and player.AnimationIndex == AnimationIndices.turning then
+            if player.currentFacingDirection == Directions.up then
                 player.PlayerAnimationFrameMax = 8
                 if player.PlayerAnimationFrame > 1 and player.PlayerAnimationFrame < 6 then
                     if player.PlayerAnimationFrame2 == 0 then
-                        player.SpriteID1 = 8
+                        player.PlayerSprite = PlayerSpriteLabels.walk_down_1
                     else
-                        player.SpriteID1 = 9
+                        player.PlayerSprite = PlayerSpriteLabels.walk_down_2
                     end
                 else
-                    player.SpriteID1 = 3
+                    player.PlayerSprite = PlayerSpriteLabels.foot_idle_down
                 end
-            elseif player.currentFacingDirection == 4 then
+            elseif player.currentFacingDirection == Directions.down then
                 player.PlayerAnimationFrameMax = 8
                 if player.PlayerAnimationFrame > 1 and player.PlayerAnimationFrame < 6 then
                     if player.PlayerAnimationFrame2 == 0 then
-                        player.SpriteID1 = 6
+                        player.PlayerSprite = PlayerSpriteLabels.walk_up_1
                     else
-                        player.SpriteID1 = 7
+                        player.PlayerSprite = PlayerSpriteLabels.walk_up_2
                     end
                 else
-                    player.SpriteID1 = 2
+                    player.PlayerSprite = PlayerSpriteLabels.foot_idle_up
                 end
             end
         else
@@ -1527,37 +1531,38 @@ local function _AnimatePlayerMovement(player)
         end
 
         --Surfing animation
-        if player.AnimateID == 20 then
-            if player.CurrentFacingDirection == 3 then
-                player.SpriteID2 = 34
-                if player.PreviousPlayerAnimation ~= 17 then
+        -- FIXME: this broke when the animation numbers changed
+        if player.AnimationGroup == AnimationGroups.surfing and player.AnimationIndex == AnimationIndices.idle then
+            if player.CurrentFacingDirection == Directions.up then
+                player.PlayerSprite = PlayerSpriteLabels.surf_sit_down
+                if player.PreviousPlayerAnimation ~= player.AnimateID then
                     player.PlayerAnimationFrame2 = 0
                     player.PlayerAnimationFrame = 24
                 end
                 player.PlayerAnimationFrameMax = 48
                 if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 28
+                    player.SurfSprite = SharedSpriteLabels.surf_idle_down_1
                 elseif player.PlayerAnimationFrame2 == 1 then
-                    player.SpriteID1 = 31
+                    player.SurfSprite = SharedSpriteLabels.surf_idle_down_2
                 end
-            elseif player.CurrentFacingDirection == 4 then
-                player.SpriteID2 = 35
-                if player.PreviousPlayerAnimation ~= 18 then
+            elseif player.CurrentFacingDirection == Directions.down then
+                player.PlayerSprite = PlayerSpriteLabels.surf_sit_up
+                if player.PreviousPlayerAnimation ~= player.AnimateID then
                     player.PlayerAnimationFrame2 = 0
                     player.PlayerAnimationFrame = 24
                 end
                 player.PlayerAnimationFrameMax = 48
                 if player.PlayerAnimationFrame2 == 0 then
-                    player.SpriteID1 = 29
+                    player.SurfSprite = SharedSpriteLabels.surf_idle_up_1
                 elseif player.PlayerAnimationFrame2 == 1 then
-                    player.SpriteID1 = 32
+                    player.SurfSprite = SharedSpriteLabels.surf_idle_up_2
                 end
             end
             --If they are now equal
         end
     end
 
-    if player.AnimationIndex == 0 then
+    if player.AnimationIndex == AnimationIndices.idle then
         player.PlayerAnimationFrame = 0
         player.AnimationX = 0
         player.AnimationY = 0
@@ -1656,9 +1661,9 @@ local function _RenderPlayer(player, renderer)
     local FinalMapX = player.RelativeX
     local FinalMapY = player.RelativeY
 
-    --Flip sprite if facing right
     local FacingTemp = 128
-    if player.CurrentFacingDirection == 2 then
+    if player.CurrentFacingDirection == Directions.right then
+        -- Flip the sprite horizontally
         FacingTemp = 144
     end
 
@@ -1667,7 +1672,7 @@ local function _RenderPlayer(player, renderer)
     if player.AnimationGroup == 1 then
         isBiking = 1
         FinalMapX = FinalMapX - 8
-        WriteIntegerArrayToEmu(renderer.spriteDataAddress - 80, FRLG.Sprites[player.Gender][player.SpriteID1])
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress - 80, FRLG.PlayerSprites[player.Gender][player.PlayerSprite])
         WriteRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 0, renderer.spritePointerAddress, 0, 0)
 
     -- Surfing
@@ -1678,7 +1683,7 @@ local function _RenderPlayer(player, renderer)
             FinalMapY = FinalMapY + 1
         end
         --Surfing char
-        WriteIntegerArrayToEmu(renderer.spriteDataAddress + 512, FRLG.Sprites[player.Gender][player.SpriteID1])
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress + 512, FRLG.SharedSprites[player.SurfSprite])
         WriteRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 128, renderer.spritePointerAddress, 0, 0)
 
         if player.PlayerAnimationFrame2 == 1 and player.AnimationIndex <= 36 then
@@ -1687,12 +1692,12 @@ local function _RenderPlayer(player, renderer)
         FinalMapX = FinalMapX - 8
         FinalMapY = FinalMapY + 8
         --Sitting char
-        WriteIntegerArrayToEmu(renderer.spriteDataAddress - 20, FRLG.Sprites[player.Gender][player.SpriteID2])
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress - 20, FRLG.PlayerSprites[player.Gender][player.PlayerSprite])
         WriteRenderInstructionToMemory(renderer,  8, FinalMapX, FinalMapY, FacingTemp, 0, renderer.spritePointerAddress + 18, 0, 0)
 
     --Player default
     else
-        WriteIntegerArrayToEmu(renderer.spriteDataAddress, FRLG.Sprites[player.Gender][player.SpriteID1])
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress, FRLG.PlayerSprites[player.Gender][player.PlayerSprite])
         WriteRenderInstructionToMemory(renderer, 0, FinalMapX, FinalMapY, FacingTemp, 128, renderer.spritePointerAddress, 0, 0)
     end
 
@@ -1708,7 +1713,7 @@ local function _RenderPlayer(player, renderer)
             SymbolY = FinalMapY - 16
             SymbolX = FinalMapX + 8
         end
-        WriteIntegerArrayToEmu(renderer.spriteDataAddress + 256 + (isBiking * 256) - 80, FRLG.Sprites[2][1])
+        WriteIntegerArrayToEmu(renderer.spriteDataAddress + 256 + (isBiking * 256) - 80, FRLG.SharedSprites[SharedSpriteLabels.battle_icon])
         WriteRenderInstructionToMemory(renderer, 16, SymbolX, SymbolY, 64, 0, spritePointer, 0, 1)
      end
     renderer.isDirty = true
@@ -1737,7 +1742,7 @@ local function _OnRemotePlayerUpdate(player, payload)
 
     -- Set initial sprite on group change
     if animationGroup ~= player.AnimationGroup then
-        player.SpriteID1 = FRLG.InitialSpritesByGroupAndDirection[animationGroup][player.CurrentFacingDirection]
+        player.PlayerSprite = InitialSpritesByGroupAndDirection[animationGroup][player.CurrentFacingDirection]
         player.AnimationGroup = animationGroup
     end
 
@@ -1920,21 +1925,21 @@ local function _GetSpriteData()
     local PlayerAction = emu:read8(33779284)
     local Bike         = emu:read16(33687112)
     if Bike > 3000 then Bike = Bike + BikeOffset end
-    local DecodedBikeAction  = FRLG.BikeDecoder[Bike]
+    local DecodedBikeVal = FRLG.BikeDecoder[Bike]
 
-    if DecodedBikeAction ~= nil then
-        LocalPlayerGender         = DecodedBikeAction[1]
-        LocalPlayerAnimationGroup = DecodedBikeAction[2]
+    if DecodedBikeVal ~= nil then
+        LocalPlayerGender         = DecodedBikeVal[1]
+        LocalPlayerAnimationGroup = DecodedBikeVal[2]
 
         -- Determine what animation represents this player right now
-        local DecodedMovement     = FRLG.MovementDecoder[LocalPlayerAnimationGroup][PlayerAction]
-        if DecodedMovement ~= nil then
-            LocalPlayerCurrentDirection = DecodedMovement[1]
-            LocalPlayerHittingWall      = DecodedMovement[3]
+        local DecodedAction = FRLG.ActionDecoder[LocalPlayerAnimationGroup][PlayerAction]
+        if DecodedAction ~= nil then
+            LocalPlayerCurrentDirection = DecodedAction[1]
+            LocalPlayerHittingWall      = DecodedAction[3]
 
             -- The specific animation changes based on whether the overworld is visible
             -- 0 represents the default or "idle" animation within this group
-            if ShouldDrawRemotePlayers then LocalPlayerAnimationIndex = DecodedMovement[2] else LocalPlayerAnimationIndex = 0 end
+            if ShouldDrawRemotePlayers then LocalPlayerAnimationIndex = DecodedAction[2] else LocalPlayerAnimationIndex = AnimationIndices.idle end
         end
     end
 
@@ -2380,7 +2385,7 @@ end
 local function GetStateForConsole()
     local out = "Nearby Players:"
     for nick, data in pairs(PlayerProxies) do
-        out = out .. nick .. "|" .. data.AnimationGroup .. ":" .. data.AnimationIndex .. ":" .. data.CurrentFacingDirection .. "|" .. data.Gender .. ":" .. tostring(data.SpriteID1) .. ":" .. tostring(data.SpriteID2) .. "\n"
+        out = out .. nick .. "|" .. data.AnimationGroup .. ":" .. data.AnimationIndex .. ":" .. data.CurrentFacingDirection .. "|" .. data.Gender .. ":" .. tostring(data.SurfSprite) .. ":" .. tostring(data.PlayerSprite) .. "\n"
     end
     return out
 end
