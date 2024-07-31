@@ -7,32 +7,36 @@ local SUPPORTED_GAMES = {
 }
 
 -- CONSTANTS
---- Sent by the client when requesting to join a server.
---- Contains a requested nickname, client version, and loaded gameID.
-local PACKET_JOIN_SERVER        = "JOIN"
---- Sent by the server if the client's `JOIN` was denied.
---- Contains the reason why in the payload. The socket is closed afterward.
-local PACKET_SERVER_DENY        = "DENY"
---- Sent by the server if the client's `JOIN` was accepted.
---- Contains an ID for the client to identify itself with.
-local PACKET_SERVER_START       = "STRT"
---- Sent by the client periodically to report its position to the server.
---- Contains info such as MapID, position, facing, animation, gender, etc.
---- Everything that is needed by another client to render this one.
---- Sent by the server to check if a client is still there.
---- If it is, the client should respond with a `PONG`
-local PACKET_PING               = "GPOS"
---- Sent by the client in response to a `PING`.
-local PACKET_PONG               = "GPOS"
+local PacketTypes = {
+    --- Sent by the client when requesting to join a server.
+    --- Contains a requested nickname, client version, and loaded gameID.
+    JOIN_SERVER = "JOIN",
+    --- Sent by the server if the client's `JOIN` was denied.
+    --- Contains the reason why in the payload. The socket is closed afterward.
+    SERVER_DENY = "DENY",
+    --- Sent by the server if the client's `JOIN` was accepted.
+    --- Contains an ID for the client to identify itself with.
+    SERVER_START = "STRT",
+    --- Sent by the client periodically to report its position to the server.
+    --- Contains info such as MapID, position, facing, animation, gender, etc.
+    --- Everything that is needed by another client to render this one.
+    --- Sent by the server to check if a client is still there.
+    --- If it is, the client should respond with a `PONG`
+    PING         = "GPOS",
+    --- Sent by the client in response to a `PING`.
+    PONG         = "GPOS"
+}
 
---- The player was denied because the server is at its configured capacity.
-local DENY_SERVER_FULL          = "FULL"
---- The player was denied because somebody else in the server is using the same name.
-local DENY_NAME_TAKEN           = "NAME"
---- The player was denied because their name had invalid characters in it.
-local DENY_INVALID_CHARS        = "CHRS"
---- The player was denied because their `JOIN` packet wasn't understood.
-local DENY_MALFORMED_PACKET     = "MALF"
+local DenyReasons = {
+    --- The player was denied because the server is at its configured capacity.
+    SERVER_FULL      = "FULL",
+    --- The player was denied because somebody else in the server is using the same name.
+    NAME_TAKEN       = "NAME",
+    --- The player was denied because their name had invalid characters in it.
+    INVALID_CHARS    = "CHRS",
+    --- The player was denied because their `JOIN` packet wasn't understood.
+    MALFORMED_PACKET = "MALF"
+}
 
 --- Maximum time to wait for a packet from the server before timing out.
 local SECONDS_UNTIL_TIMEOUT = 10
@@ -209,22 +213,22 @@ local function OnDataReceived()
     local payload     = string.sub(ReadData, 21, 63)
 
 
-    if messageType == PACKET_SERVER_START then
+    if messageType == PacketTypes.SERVER_START then
         console:log("Joined Successfully!")
         ServerName = sender
         ErrorMessage = ""
         MasterClient = "c"
-    elseif messageType == PACKET_SERVER_DENY then
+    elseif messageType ==  PacketTypes.SERVER_DENY then
         local reason = string.sub(payload, 1, 4)
         if tonumber(reason) ~= nil then
             ErrorMessage = "Server requires client script version " .. reason .. " or higher."
-        elseif reason == DENY_SERVER_FULL then
+        elseif reason ==  DenyReasons.SERVER_FULL then
             ErrorMessage = "Server is full."
-        elseif reason == DENY_NAME_TAKEN then
+        elseif reason ==  DenyReasons.NAME_TAKEN then
             ErrorMessage = "The name \"" .. Nickname .. "\" is already in use."
-        elseif reason == DENY_INVALID_CHARS then
+        elseif reason ==  DenyReasons.INVALID_CHARS then
             ErrorMessage = "Your nickname contained unsupported characters. Try picking one that only uses letters and numbers."
-        elseif reason == DENY_MALFORMED_PACKET then
+        elseif reason ==  DenyReasons.MALFORMED_PACKET then
             ErrorMessage = "The server was not able to understand our request."
         else
             ErrorMessage = "Connection refused. Error code: " .. reason
@@ -232,8 +236,8 @@ local function OnDataReceived()
         LoadedGame = nil
         SocketMain:close()
         console:log(ErrorMessage)
-    elseif messageType == PACKET_PING then
-        SendToServer(PACKET_PONG, payload)
+    elseif messageType ==  PacketTypes.PING then
+        SendToServer( PacketTypes.PONG, payload)
     else
         LoadedGame.OnDataReceived(sender, messageType, payload)
     end
@@ -246,7 +250,7 @@ local function ConnectToServer()
     local success, _ = SocketMain:connect(Config.Host, Config.Port)
     if success then
         console:log("Joining game...")
-        SendData(PACKET_JOIN_SERVER, LoadedGame.Version .. LoadedGame.GameID, LoadedGame.GetStatePayload())
+        SendData( PacketTypes.JOIN_SERVER, LoadedGame.Version .. LoadedGame.GameID, LoadedGame.GetStatePayload())
         SocketMain:add("received", OnDataReceived)
     else
         console:log("Could not connect to server.")

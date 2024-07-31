@@ -18,45 +18,48 @@ local VERSION_NUMBER = 1019
 --- Flip the gender of remote players. Used for debugging sprites.
 local DEBUG_GENDER_SWITCH = false
 
-local PACKET_PLAYER_UPDATE      = "SPOS"
---- Sent by the server to tell a client it should stop tracking another.
---- This happens when they disconnect or when somebody moves to a different area that the server
---- doesn't think they can be seen from.
-local PACKET_PLAYER_EXIT        = "EXIT"
---- Sent by the client to request the Pokemon of another.
---- A client receiving this will respond with a series of 6 `POKE` packets.
-local PACKET_REQUEST_POKEMON    = "RPOK"
---- Sent by the client in response to an `RPOK`.
---- Contains the player's party of Pokemon.
-local PACKET_RAW_POKEMON_DATA   = "POKE"
---- Sent by the client who is too busy to respond to another player's request.
---- This can happen in response to Trade requests and Battle requests
-local PACKET_TOO_BUSY           = "TBUS"
---- Sent by the client to request to trade with another.
-local PACKET_REQUEST_TRADE      = "RTRA"
---- Sent by the client to accept the trade.
-local PACKET_DECLINE_TRADE      = "DTRA"
---- Sent by the client to decline the trade.
-local PACKET_ACCEPT_TRADE       = "STRA"
---- Sent by the client, containing raw trade payloads.
-local PACKET_RAW_TRADE_DATA     = "TRAD"
---- Sent by the client to cancel a previously accepted trade.
-local PACKET_CANCEL_TRADE       = "CTRA"
---- Sent by the client if they refuse a trade offer.
-local PACKET_REFUSE_TRADE_OFFER = "ROFF"
---- Sent by the client, challenging another to battle.
-local PACKET_REQUEST_BATTLE     = "RBAT"
---- Sent by the client, declining the challenge.
-local PACKET_DECLINE_BATTLE     = "DBAT"
---- Sent by the client, accepting the challenge.
-local PACKET_ACCEPT_BATTLE      = "SBAT"
---- Sent by the client, containing raw battle data.
-local PACKET_RAW_BATTLE_DATA    = "BATT"
---- Sent by the client, canceling a previously accepted battle.
-local PACKET_CANCEL_BATTLE      = "CBAT"
---- Sent by clients to one another.
---- I believe this is for forwarding raw Link Cable communications.
-local PACKET_RAW_LINK_DATA      = "SLNK"
+local PacketTypes = {
+    --- Contains the current position, map, and animation state of a player
+    PLAYER_UPDATE      = "SPOS",
+    --- Sent by the server to tell a client it should stop tracking another.
+    --- This happens when they disconnect or when somebody moves to a different area that the server
+    --- doesn't think they can be seen from.
+    PLAYER_EXIT        = "EXIT",
+    --- Sent by the client to request the Pokemon of another.
+    --- A client receiving this will respond with a series of 6 `POKE` packets.
+    REQUEST_POKEMON    = "RPOK",
+    --- Sent by the client in response to an `RPOK`.
+    --- Contains the player's party of Pokemon.
+    RAW_POKEMON_DATA   = "POKE",
+    --- Sent by the client who is too busy to respond to another player's request.
+    --- This can happen in response to Trade requests and Battle requests
+    TOO_BUSY           = "TBUS",
+    --- Sent by the client to request to trade with another.
+    REQUEST_TRADE      = "RTRA",
+    --- Sent by the client to accept the trade.
+    DECLINE_TRADE      = "DTRA",
+    --- Sent by the client to decline the trade.
+    ACCEPT_TRADE       = "STRA",
+    --- Sent by the client, containing raw trade payloads.
+    RAW_TRADE_DATA     = "TRAD",
+    --- Sent by the client to cancel a previously accepted trade.
+    CANCEL_TRADE       = "CTRA",
+    --- Sent by the client if they refuse a trade offer.
+    REFUSE_TRADE_OFFER = "ROFF",
+    --- Sent by the client, challenging another to battle.
+    REQUEST_BATTLE     = "RBAT",
+    --- Sent by the client, declining the challenge.
+    DECLINE_BATTLE     = "DBAT",
+    --- Sent by the client, accepting the challenge.
+    ACCEPT_BATTLE      = "SBAT",
+    --- Sent by the client, containing raw battle data.
+    RAW_BATTLE_DATA    = "BATT",
+    --- Sent by the client, canceling a previously accepted battle.
+    CANCEL_BATTLE      = "CBAT",
+    --- Sent by clients to one another.
+    --- I believe this is for forwarding raw Link Cable communications.
+    RAW_LINK_DATA      = "SLNK"
+}
 
 -- SESSION VARIABLES
 --- The currently loaded rom.
@@ -80,46 +83,43 @@ local TargetPlayer = "00000000"
 local PlayerProxies = {}
 
 -- LOCAL PLAYER VARS
-local CameraX = 0
-local CameraY = 0
--- ???
-local LocalPlayerMapXMovePrev = 0
-local LocalPlayerMapYMovePrev = 0
---- The ID of the current map
-local LocalPlayerMapID = 0
---- The ID of the previous map
-local LocalPlayerMapIDPrev = 0
---- How the current map was entered from the previous map
-local LocalPlayerMapEntranceType = 1
---- Whether the player has changed maps this frame
-local LocalPlayerMapChange = 0
---- The direction the local player is facing.
---- Initialize to up, because it conveys to other players that you might not
---- quite be ready yet.
-local LocalPlayerCurrentDirection = Directions.up
--- ??? This may represent the offset of the current map to the previous.
-local LocalPlayerDifferentMapX = 0
-local LocalPlayerDifferentMapY = 0
--- The current position
-local LocalPlayerCurrentX = 0
-local LocalPlayerCurrentY = 0
--- The previous position
-local LocalPlayerPreviousX = 0
-local LocalPlayerPreviousY = 0
--- This is the coordinate that the player entered this map on
-local LocalPlayerStartX = 0
-local LocalPlayerStartY = 0
---- Whether this player is male or female (0 = Male, 1 = Female)
-local LocalPlayerGender = Genders.male
---- Whether this player is hitting a wall
-local LocalPlayerHittingWall = 0
---- Animation Group (0 = Walking, 1 = Biking, 2 = Surfing)
---- Used for some initial decoding and sent to other players, but doesn't seem to be used by other players.
-local LocalPlayerAnimationGroup = AnimationGroups.on_foot
---- The animation within the group that is currently playing
-local LocalPlayerAnimationIndex = AnimationIndices.idle
---- Whether the player is in a battle (0 = No, 1 = Yes)
-local LocalPlayerIsInBattle = 0
+--- Camera can be between -16 and 16 and is to get the camera movement while moving
+local Camera = {X=0, Y=0}
+
+local LocalPlayer = {
+    --- ???
+    MapMovePrev = {X=0, Y=0},
+    --- The ID of the current map
+    MapID = 0,
+    --- The ID of the previous map
+    MapIDPrev = 0,
+    --- How the current map was entered from the previous map
+    MapEntranceType = 1,
+    --- Whether the player has changed maps this frame
+    MapChange = 0,
+    --- The direction the local player is facing.
+    --- Initialize to up, because it conveys to other players that you might not
+    --- quite be ready yet.
+    CurrentDirection = Directions.up,
+    --- ??? This may represent the offset of the current map to the previous.
+    DifferentMap = {X=0, Y=0},
+    --- The current position
+    Current = {X=0, Y=0},
+    --- The previous position
+    Previous = {X=0, Y=0},
+    --- This is the coordinate that the player entered this map on
+    Start = {X=0, Y=0},
+    --- Whether this player is male or female (0 = Male, 1 = Female)
+    Gender = Genders.male,
+    --- Whether this player is hitting a wall
+    HittingWall = 0,
+    --- The group of animations being used by this player
+    AnimationGroup = AnimationGroups.on_foot,
+    --- The animation within the group that is currently playing
+    AnimationIndex = AnimationIndices.idle,
+    --- Whether the player is in a battle (0 = No, 1 = Yes)
+    IsInBattle = 0
+}
 
 --- The last position payload created by this client.
 local LastSposPayload = ""
@@ -162,7 +162,7 @@ local function _RequestRawPokemonData()
     for i = 1, 6 do
         EnemyPokemon[i] = ""
     end
-    _SendToPlayer(PACKET_REQUEST_POKEMON)
+    _SendToPlayer( PacketTypes.REQUEST_POKEMON)
 end
 
 --- Load pokemon data from memory and store them in our variables.
@@ -195,19 +195,19 @@ local function _SendRawPokemonData()
             StartNum = ((i - 1) * 25) + 1
             StartNum2 = StartNum + 24
             PokeTemp = string.sub(Pokemon[j], StartNum, StartNum2)
-            _SendToPlayer(PACKET_RAW_POKEMON_DATA, PokeTemp)
+            _SendToPlayer( PacketTypes.RAW_POKEMON_DATA, PokeTemp)
         end
     end
 end
 
 --- Helper method to send raw trade data to the other player.
 local function _SendRawTradeData()
-    _SendToPlayer(PACKET_RAW_TRADE_DATA, TradeVars[1] .. TradeVars[2] .. TradeVars[3] .. TradeVars[5])
+    _SendToPlayer( PacketTypes.RAW_TRADE_DATA, TradeVars[1] .. TradeVars[2] .. TradeVars[3] .. TradeVars[5])
 end
 
 --- Helper method to send raw battle data to the other player.
 local function _SendRawBattleData()
-    _SendToPlayer(PACKET_RAW_BATTLE_DATA, BattleVars[1] .. BattleVars[2] .. BattleVars[3] .. BattleVars[4] .. BattleVars[5] .. BattleVars[6] .. BattleVars[7] .. BattleVars[8] .. BattleVars[9] .. BattleVars[10])
+    _SendToPlayer( PacketTypes.RAW_BATTLE_DATA, BattleVars[1] .. BattleVars[2] .. BattleVars[3] .. BattleVars[4] .. BattleVars[5] .. BattleVars[6] .. BattleVars[7] .. BattleVars[8] .. BattleVars[9] .. BattleVars[10])
 end
 
 
@@ -223,7 +223,7 @@ local function _SendRawLinkData(size)
     local SizeAct = size + 1000000000
     --		SizeAct = tostring(SizeAct)
     --		SizeAct = string.format("%.0f",SizeAct)
-    _SendToPlayer(PACKET_RAW_LINK_DATA, SizeAct)
+    _SendToPlayer( PacketTypes.RAW_LINK_DATA, SizeAct)
 end
 
 local function _SendMultiplayerPackets(Offset, size)
@@ -898,7 +898,7 @@ local function _Tradescript()
         --You have canceled or have not selected a valid pokemon slot
     elseif Var8000[2] == 1 and TradeVars[1] == 1 then
         _Loadscript(16)
-        _SendToPlayer(PACKET_CANCEL_TRADE)
+        _SendToPlayer( PacketTypes.CANCEL_TRADE)
         LockFromScript = 0
         TradeVars[1] = 0
         TradeVars[2] = 0
@@ -954,7 +954,7 @@ local function _Tradescript()
     elseif TradeVars[1] == 3 then
         --If you decline
         if Var8000[2] == 1 then
-            _SendToPlayer(PACKET_REFUSE_TRADE_OFFER)
+            _SendToPlayer( PacketTypes.REFUSE_TRADE_OFFER)
             _Loadscript(16)
             LockFromScript = 7
             TradeVars[1] = 0
@@ -1036,20 +1036,21 @@ end
 --- Create a table to track a remote player
 local function NewPlayerProxy()
     local Proxy = {
-        AnimationX=0,
-        AnimationY=0,
-        FutureX=0,
-        FutureY=0,
-        CurrentX=0,
-        CurrentY=0,
-        PreviousX=0,
-        PreviousY=0,
-        StartX=2000,
-        StartY=2000,
-        DifferentMapX=0,
-        DifferentMapY=0,
-        RelativeX=0,
-        RelativeY=0,
+        --- Range is -16 - 16 and is purely to animate sprites
+        Animation    = {X=0, Y=0},
+        --- The future position, which the proxy will move toward
+        Future       = {X=0, Y=0},
+        --- The current, rendered position of this proxy
+        Current      = {X=0, Y=0},
+        --- The previous position of this proxy, used for map change calculations
+        Previous     = {X=0, Y=0},
+        --- The coordinate that this proxy entered a new map on
+        Start        = {X=2000, Y=2000},
+        --- ? The coordinate of this proxy relative to a different map?
+        DifferentMap = {X=0, Y=0},
+        --- The coordinate of this proxy relative to the screen, used to calculate visibility
+        Relative     = {X=0, Y=0},
+        --- The direction this proxy is facing
         CurrentFacingDirection=Directions.up,
         --- The map this player is currently on
         CurrentMapID=0,
@@ -1064,7 +1065,6 @@ local function NewPlayerProxy()
         --- Whether this player could be visible to us
         --- True if we either share map ids or previous map ids
         PlayerVis=0,
-
         --- Whether this player is hitting a wall
         HittingWall=0,
         --- Used to determine whether to draw the battle symbol
@@ -1076,11 +1076,13 @@ local function NewPlayerProxy()
         --- The animation within the group that is playing
         --- with 0 being guaranteed as default / idle
         AnimationIndex=0,
-        -- Surf sprite frame number and target image
+        --- Surf sprite frame number
         SurfAnimationFrame=0,
+        --- Surf sprite target image
         SurfSprite=SharedSpriteLabels.surf_idle_down_1,
-        -- Player sprite frame number and target image
+        --- Player sprite frame number
         PlayerAnimationFrame=0,
+        --- Player sprite target image
         PlayerSprite=PlayerSpriteLabels.foot_idle_down
     }
 
@@ -1168,49 +1170,41 @@ local function _UpdatePlayerVisibility(player)
     local MaxY = 144
     -- First, we check whether a player is on this or a map we know to be adjacent.
     -- If this player is on the same map as us
-    if LocalPlayerMapID == player.CurrentMapID then
-        player.DifferentMapX = 0
-        player.DifferentMapY = 0
+    if LocalPlayer.MapID == player.CurrentMapID then
+        player.DifferentMap.X = 0
+        player.DifferentMap.Y = 0
         player.MapChange = 0
     -- If this player is on a map we know to be adjacent to the one we are on
-    elseif (LocalPlayerMapIDPrev == player.CurrentMapID or LocalPlayerMapID == player.PreviousMapID) and player.MapEntranceType == 0 then
+    elseif (LocalPlayer.MapIDPrev == player.CurrentMapID or LocalPlayer.MapID == player.PreviousMapID) and player.MapEntranceType == 0 then
         if player.MapChange == 1 then
-            player.DifferentMapX = ((player.PreviousX - player.StartX) * 16)
-            player.DifferentMapY = ((player.PreviousY - player.StartY) * 16)
+            player.DifferentMap.X = ((player.Previous.X - player.Start.X) * 16)
+            player.DifferentMap.Y = ((player.Previous.Y - player.Start.Y) * 16)
         end
     else
         player.PlayerVis = 0
-        player.DifferentMapX = 0
-        player.DifferentMapY = 0
+        player.DifferentMap.X = 0
+        player.DifferentMap.Y = 0
         player.MapChange = 0
         return
     end
 
-    if LocalPlayerMapEntranceType == 0 and (LocalPlayerMapIDPrev == player.CurrentMapID or LocalPlayerMapID == player.PreviousMapID) and player.MapChange == 0 then
-        --AnimationX is -16 - 16 and is purely to animate sprites
-        --CameraX can be between -16 and 16 and is to get the camera movement while moving
-        --Current X is the X the current sprite has
-        --Player X is the X the player sprite has
+    if LocalPlayer.MapEntranceType == 0 and (LocalPlayer.MapIDPrev == player.CurrentMapID or LocalPlayer.MapID == player.PreviousMapID) and player.MapChange == 0 then
         --112 and 56 = middle of screen
-        player.RelativeX = player.AnimationX + CameraX + ((player.CurrentX - LocalPlayerCurrentX) * 16) + player.DifferentMapX + LocalPlayerDifferentMapX + 112
-        player.RelativeY = player.AnimationY + CameraY + ((player.CurrentY - LocalPlayerCurrentY) * 16) + player.DifferentMapY + LocalPlayerDifferentMapY + 56
+        player.Relative.X = player.Animation.X + Camera.X + ((player.Current.X - LocalPlayer.Current.X) * 16) + player.DifferentMap.X + LocalPlayer.DifferentMap.X + 112
+        player.Relative.Y = player.Animation.Y + Camera.Y + ((player.Current.Y - LocalPlayer.Current.Y) * 16) + player.DifferentMap.Y + LocalPlayer.DifferentMap.Y + 56
     else
-        player.RelativeX = player.AnimationX + CameraX + ((player.CurrentX - LocalPlayerCurrentX) * 16) + player.DifferentMapX + 112
-        player.RelativeY = player.AnimationY + CameraY + ((player.CurrentY - LocalPlayerCurrentY) * 16) + player.DifferentMapY + 56
+        player.Relative.X = player.Animation.X + Camera.X + ((player.Current.X - LocalPlayer.Current.X) * 16) + player.DifferentMap.X + 112
+        player.Relative.Y = player.Animation.Y + Camera.Y + ((player.Current.Y - LocalPlayer.Current.Y) * 16) + player.DifferentMap.Y + 56
     end
 
     -- Next, we check whether the player is within our screen space
-    --This is for the bike + surf
-    if player.AnimationGroup ~= 0 then
+    if player.AnimationGroup ~= AnimationGroups.on_foot then
         MinX = -8
-    -- FIXME: never used. The range of 33-40 is completely within the range of 17-40
-    -- elseif player.AnimationIndex >= 33 and player.AnimationIndex <= 40 then
-    --    MinX = 8
     else
         MinX = -16
     end
 
-    if player.RelativeX > MaxX or player.RelativeX < MinX or player.RelativeY > MaxY or player.RelativeY < MinY then
+    if player.Relative.X > MaxX or player.Relative.X < MinX or player.Relative.Y > MaxY or player.Relative.Y < MinY then
         player.PlayerVis = 0
     else
         player.PlayerVis = 1
@@ -1230,21 +1224,21 @@ local function _AnimatePlayerMovement(player)
     if speed == nil or player.HittingWall == 1 or player.IsInBattle == 1 then speed = 0 end
 
     -- If we have received a new packet, snap the current position to match
-    if player.FutureX ~= 0 then
+    if player.Future.X ~= 0 then
         if speed > 0 then
-            player.CurrentX = player.FutureX - deltas[1]
-            player.CurrentY = player.FutureY - deltas[2]
+            player.Current.X = player.Future.X - deltas[1]
+            player.Current.Y = player.Future.Y - deltas[2]
         else
-            player.CurrentX = player.FutureX
-            player.CurrentY = player.FutureY
+            player.Current.X = player.Future.X
+            player.Current.Y = player.Future.Y
         end
-        player.FutureX = 0
-        player.FutureY = 0
+        player.Future.X = 0
+        player.Future.Y = 0
     end
 
     if speed > 0 then
-        player.CurrentX = player.CurrentX + (deltas[1] * speed)
-        player.CurrentY = player.CurrentY + (deltas[2] * speed)
+        player.Current.X = player.Current.X + (deltas[1] * speed)
+        player.Current.Y = player.Current.Y + (deltas[2] * speed)
     end
 
     -- Update the player sprite animation
@@ -1281,48 +1275,48 @@ local function _CalculateCamera()
 
     --if PlayerMapChange == 1 then
     --Update first if map change
-    LocalPlayerMapXMovePrev = emu:read16(33687132) - 8
-    LocalPlayerMapYMovePrev = emu:read16(33687134)
-    PlayerMapXMoveTemp = LocalPlayerMapXMovePrev % 16
-    PlayerMapYMoveTemp = LocalPlayerMapYMovePrev % 16
+    LocalPlayer.MapMovePrev.X = emu:read16(33687132) - 8
+    LocalPlayer.MapMovePrev.Y = emu:read16(33687134)
+    PlayerMapXMoveTemp = LocalPlayer.MapMovePrev.X % 16
+    PlayerMapYMoveTemp = LocalPlayer.MapMovePrev.Y % 16
 
-    if LocalPlayerCurrentDirection == 1 then
-        CameraX = PlayerMapXMoveTemp * -1
+    if LocalPlayer.CurrentDirection == 1 then
+        Camera.X = PlayerMapXMoveTemp * -1
         --	console:log("XTEMP: " .. PlayerMapXMoveTemp)
-    elseif LocalPlayerCurrentDirection == 2 then
+    elseif LocalPlayer.CurrentDirection == 2 then
         if PlayerMapXMoveTemp > 0 then
-            CameraX = 16 - PlayerMapXMoveTemp
+            Camera.X = 16 - PlayerMapXMoveTemp
         else
-            CameraX = 0
+            Camera.X = 0
         end
         --console:log("XTEMP: " .. PlayerMapXMoveTemp)
-    elseif LocalPlayerCurrentDirection == 3 then
-        CameraY = PlayerMapYMoveTemp * -1
+    elseif LocalPlayer.CurrentDirection == 3 then
+        Camera.Y = PlayerMapYMoveTemp * -1
         --console:log("YTEMP: " .. PlayerMapYMoveTemp)
-    elseif LocalPlayerCurrentDirection == 4 then
+    elseif LocalPlayer.CurrentDirection == 4 then
         --console:log("YTEMP: " .. PlayerMapYMoveTemp)
         if PlayerMapYMoveTemp > 0 then
-            CameraY = 16 - PlayerMapYMoveTemp
+            Camera.Y = 16 - PlayerMapYMoveTemp
         else
-            CameraY = 0
+            Camera.Y = 0
         end
     end
 
     --Calculations for X and Y of new map
-    if LocalPlayerMapChange == 1 and (CameraX == 0 and CameraY == 0) then
-        LocalPlayerMapChange = 0
-        LocalPlayerStartX = LocalPlayerCurrentX
-        LocalPlayerStartY = LocalPlayerCurrentY
-        LocalPlayerDifferentMapX = (LocalPlayerStartX - LocalPlayerPreviousX) * 16
-        LocalPlayerDifferentMapY = (LocalPlayerStartY - LocalPlayerPreviousY) * 16
-        if LocalPlayerCurrentDirection == 1 then
-            LocalPlayerStartX = LocalPlayerStartX + 1
-        elseif LocalPlayerCurrentDirection == 2 then
-            LocalPlayerStartX = LocalPlayerStartX - 1
-        elseif LocalPlayerCurrentDirection == 3 then
-            LocalPlayerStartY = LocalPlayerStartY + 1
-        elseif LocalPlayerCurrentDirection == 4 then
-            LocalPlayerStartY = LocalPlayerStartY - 1
+    if LocalPlayer.MapChange == 1 and (Camera.X == 0 and Camera.Y == 0) then
+        LocalPlayer.MapChange = 0
+        LocalPlayer.Start.X = LocalPlayer.Current.X
+        LocalPlayer.Start.Y = LocalPlayer.Current.Y
+        LocalPlayer.DifferentMap.X = (LocalPlayer.Start.X - LocalPlayer.Previous.X) * 16
+        LocalPlayer.DifferentMap.Y = (LocalPlayer.Start.Y - LocalPlayer.Previous.Y) * 16
+        if LocalPlayer.CurrentDirection == 1 then
+            LocalPlayer.Start.X = LocalPlayer.Start.X + 1
+        elseif LocalPlayer.CurrentDirection == 2 then
+            LocalPlayer.Start.X = LocalPlayer.Start.X - 1
+        elseif LocalPlayer.CurrentDirection == 3 then
+            LocalPlayer.Start.Y = LocalPlayer.Start.Y + 1
+        elseif LocalPlayer.CurrentDirection == 4 then
+            LocalPlayer.Start.Y = LocalPlayer.Start.Y - 1
         end
     end
 end
@@ -1334,8 +1328,8 @@ local function _RenderPlayer(player, renderer)
     local isBiking = 0
     local isSurfing = 0
 
-    local FinalMapX = player.RelativeX
-    local FinalMapY = player.RelativeY
+    local FinalMapX = player.Relative.X
+    local FinalMapY = player.Relative.Y
 
     local FacingTemp = 128
     if player.CurrentFacingDirection == Directions.right then
@@ -1345,7 +1339,7 @@ local function _RenderPlayer(player, renderer)
 
     -- Biking
     -- FIXME: original range was not "all bike sprites"
-    if player.AnimationGroup == 1 then
+    if player.AnimationGroup == AnimationGroups.on_bike then
         isBiking = 1
         FinalMapX = FinalMapX - 8
         WriteIntegerArrayToEmu(renderer.spriteDataAddress - 80, FRLG.PlayerSprites[player.Gender][player.PlayerSprite])
@@ -1353,7 +1347,7 @@ local function _RenderPlayer(player, renderer)
 
     -- Surfing
     -- FIXME: original range was not "all surfing sprites"
-    elseif player.AnimationGroup == 2 then
+    elseif player.AnimationGroup == AnimationGroups.surfing then
         isSurfing = 1
         if player.SurfAnimationFrame >= FRLG.SurfingAnimation.total_frames/2 then
             FinalMapY = FinalMapY + 1
@@ -1401,7 +1395,7 @@ local function _OnRemotePlayerUpdate(player, payload)
     local x                       = tonumber(string.sub(payload,  5,  8)) - 2000
     local y                       = tonumber(string.sub(payload,  9, 12)) - 2000
     -- Three free bytes
-    player.AnimationGroup          = tonumber(string.sub(payload, 16, 16))
+    player.AnimationGroup         = tonumber(string.sub(payload, 16, 16))
     player.AnimationIndex         = tonumber(string.sub(payload, 17, 17))
     player.CurrentFacingDirection = tonumber(string.sub(payload, 18, 18))
     player.HittingWall            = tonumber(string.sub(payload, 19, 19))
@@ -1410,8 +1404,8 @@ local function _OnRemotePlayerUpdate(player, payload)
     local map                     = tonumber(string.sub(payload, 22, 27)) - 100000
     local prevMap                 = tonumber(string.sub(payload, 28, 33)) - 100000
     local mapEntranceType         = tonumber(string.sub(payload, 34, 34))
-    player.StartX                 = tonumber(string.sub(payload, 35, 38)) - 2000
-    player.StartY                 = tonumber(string.sub(payload, 39, 42)) - 2000
+    player.Start.X                = tonumber(string.sub(payload, 35, 38)) - 2000
+    player.Start.Y                = tonumber(string.sub(payload, 39, 42)) - 2000
     -- One free byte
 
     player.AnimateID = tonumber(string.sub(payload, 16, 17))
@@ -1427,17 +1421,17 @@ local function _OnRemotePlayerUpdate(player, payload)
         player.PreviousMapID = prevMap
         player.MapEntranceType = mapEntranceType
         -- Set the position of where they were last on their previous map
-        player.PreviousX = player.CurrentX
-        player.PreviousY = player.CurrentY
-        player.CurrentX = x
-        player.CurrentY = y
+        player.Previous.X = player.Current.X
+        player.Previous.Y = player.Current.Y
+        player.Current.X = x
+        player.Current.Y = y
         -- A flag indicating that this player has recently changed maps
         player.MapChange = 1
 
         -- TODO: this would be a great place to update map offsets and/or relative positions
     end
-    player.FutureX = x
-    player.FutureY = y
+    player.Future.X = x
+    player.Future.Y = y
 
     if DEBUG_GENDER_SWITCH then
         player.Gender = 1 - gender
@@ -1481,7 +1475,7 @@ local function _DoScriptUpdates()
                 _Loadscript(20)
             end
         end
-        --				SendToPlayer(PACKET_REQUEST_BATTLE)
+        --				SendToPlayer( PacketTypes.REQUEST_BATTLE)
 
         --Wait until other player accepts trade
     elseif LockFromScript == 5 then
@@ -1499,14 +1493,14 @@ local function _DoScriptUpdates()
                 _Loadscript(21)
             end
         end
-        --				SendToPlayer(PACKET_REQUEST_TRADE)
+        --				SendToPlayer( PacketTypes.REQUEST_TRADE)
 
         --Show card. Placeholder for now
     elseif LockFromScript == 6 then
         if Var8000[2] ~= 0 then
             --		console:log("Var 8001: " .. Var8000[2])
             LockFromScript = 0
-            --	then SendToPlayer(PACKET_REQUEST_TRADE)
+            --	then SendToPlayer( PacketTypes.REQUEST_TRADE)
         end
 
         --Exit message
@@ -1532,7 +1526,7 @@ local function _DoScriptUpdates()
         if Var8000[2] == 2 then
             if OtherPlayerHasCancelled == 0 then
                 _RequestRawPokemonData()
-                _SendToPlayer(PACKET_ACCEPT_BATTLE)
+                _SendToPlayer( PacketTypes.ACCEPT_BATTLE)
                 LockFromScript = 8
                 _Loadscript(13)
             else
@@ -1542,7 +1536,7 @@ local function _DoScriptUpdates()
             end
         elseif Var8000[2] == 1 then
             LockFromScript = 0
-            _SendToPlayer(PACKET_DECLINE_BATTLE)
+            _SendToPlayer( PacketTypes.DECLINE_BATTLE)
             Keypressholding = 1
         end
 
@@ -1553,7 +1547,7 @@ local function _DoScriptUpdates()
         if Var8000[2] == 2 then
             if OtherPlayerHasCancelled == 0 then
                 _RequestRawPokemonData()
-                _SendToPlayer(PACKET_ACCEPT_TRADE)
+                _SendToPlayer( PacketTypes.ACCEPT_TRADE)
                 LockFromScript = 9
             else
                 OtherPlayerHasCancelled = 0
@@ -1562,7 +1556,7 @@ local function _DoScriptUpdates()
             end
         elseif Var8000[2] == 1 then
             LockFromScript = 0
-            _SendToPlayer(PACKET_DECLINE_TRADE)
+            _SendToPlayer( PacketTypes.DECLINE_TRADE)
             Keypressholding = 1
         end
     end
@@ -1570,19 +1564,19 @@ end
 
 --- Gets the map id and location on that map.
 local function _GetPosition()
-    LocalPlayerMapIDPrev = emu:read16(33813418)
-    if LocalPlayerMapIDPrev == LocalPlayerMapID then
-        LocalPlayerPreviousX = LocalPlayerCurrentX
-        LocalPlayerPreviousY = LocalPlayerCurrentY
-        LocalPlayerMapEntranceType = emu:read8(33785351)
-        if LocalPlayerMapEntranceType > 10 then
-            LocalPlayerMapEntranceType = 9
+    LocalPlayer.MapIDPrev = emu:read16(33813418)
+    if LocalPlayer.MapIDPrev == LocalPlayer.MapID then
+        LocalPlayer.Previous.X = LocalPlayer.Current.X
+        LocalPlayer.Previous.Y = LocalPlayer.Current.Y
+        LocalPlayer.MapEntranceType = emu:read8(33785351)
+        if LocalPlayer.MapEntranceType > 10 then
+            LocalPlayer.MapEntranceType = 9
         end
-        LocalPlayerMapChange = 1
+        LocalPlayer.MapChange = 1
     end
-    LocalPlayerMapID    = emu:read16(33813416)
-    LocalPlayerCurrentX = emu:read16(33779272)
-    LocalPlayerCurrentY = emu:read16(33779274)
+    LocalPlayer.MapID    = emu:read16(33813416)
+    LocalPlayer.Current.X = emu:read16(33779272)
+    LocalPlayer.Current.Y = emu:read16(33779274)
 end
 
 --- Reads the currently displayed sprite and
@@ -1599,18 +1593,18 @@ local function _GetSpriteData()
     local DecodedBikeVal = FRLG.BikeDecoder[Bike]
 
     if DecodedBikeVal ~= nil then
-        LocalPlayerGender         = DecodedBikeVal[1]
-        LocalPlayerAnimationGroup = DecodedBikeVal[2]
+        LocalPlayer.Gender         = DecodedBikeVal[1]
+        LocalPlayer.AnimationGroup = DecodedBikeVal[2]
 
         -- Determine what animation represents this player right now
-        local DecodedAction = FRLG.ActionDecoder[LocalPlayerAnimationGroup][PlayerAction]
+        local DecodedAction = FRLG.ActionDecoder[LocalPlayer.AnimationGroup][PlayerAction]
         if DecodedAction ~= nil then
-            LocalPlayerCurrentDirection = DecodedAction[1]
-            LocalPlayerHittingWall      = DecodedAction[3]
+            LocalPlayer.CurrentDirection = DecodedAction[1]
+            LocalPlayer.HittingWall      = DecodedAction[3]
 
             -- The specific animation changes based on whether the overworld is visible
             -- 0 represents the default or "idle" animation within this group
-            if ShouldDrawRemotePlayers then LocalPlayerAnimationIndex = DecodedAction[2] else LocalPlayerAnimationIndex = AnimationIndices.idle end
+            if ShouldDrawRemotePlayers then LocalPlayer.AnimationIndex = DecodedAction[2] else LocalPlayer.AnimationIndex = AnimationIndices.idle end
         end
     end
 
@@ -1632,9 +1626,9 @@ local function _GetScreenState()
     end
 
     if BattleScreenData == 1 then
-        LocalPlayerIsInBattle = 1
+        LocalPlayer.IsInBattle = 1
     else
-        LocalPlayerIsInBattle = 0
+        LocalPlayer.IsInBattle = 0
     end
 end
 
@@ -1713,27 +1707,27 @@ local function _GetPartialPayload()
     local Payload = ""
 
     -- Sprite and animation data
-    Payload = Payload .. LocalPlayerAnimationGroup
-    Payload = Payload .. LocalPlayerAnimationIndex
-    Payload = Payload .. LocalPlayerCurrentDirection
-    Payload = Payload .. LocalPlayerHittingWall
-    Payload = Payload .. LocalPlayerGender
+    Payload = Payload .. LocalPlayer.AnimationGroup
+    Payload = Payload .. LocalPlayer.AnimationIndex
+    Payload = Payload .. LocalPlayer.CurrentDirection
+    Payload = Payload .. LocalPlayer.HittingWall
+    Payload = Payload .. LocalPlayer.Gender
 
     -- Whether this player is in a battle
-    Payload = Payload .. LocalPlayerIsInBattle
+    Payload = Payload .. LocalPlayer.IsInBattle
 
     -- The map id of this player
-    Payload = Payload .. (LocalPlayerMapID + 100000)
+    Payload = Payload .. (LocalPlayer.MapID + 100000)
 
     -- The previous map id of this player
-    Payload = Payload .. (LocalPlayerMapIDPrev + 100000)
+    Payload = Payload .. (LocalPlayer.MapIDPrev + 100000)
 
     -- The method used to change maps
-    Payload = Payload .. LocalPlayerMapEntranceType
+    Payload = Payload .. LocalPlayer.MapEntranceType
 
     -- The position this player entered this map from, used to calculate offsets
-    Payload = Payload .. (LocalPlayerStartX + 2000)
-    Payload = Payload .. (LocalPlayerStartY + 2000)
+    Payload = Payload .. (LocalPlayer.Start.X + 2000)
+    Payload = Payload .. (LocalPlayer.Start.Y + 2000)
 
     -- More padding
     Payload = Payload .. "0"
@@ -1745,60 +1739,60 @@ local function GetStatePayload(PartialPayload)
     if PartialPayload == nil then
         PartialPayload = _GetPartialPayload()
     end
-    return "1000" .. (LocalPlayerCurrentX + 2000) .. (LocalPlayerCurrentY + 2000) .. "000" .. PartialPayload
+    return "1000" .. (LocalPlayer.Current.X + 2000) .. (LocalPlayer.Current.Y + 2000) .. "000" .. PartialPayload
 end
 
 --- Called when a packet is received that is specific to the gameplay
 local function OnDataReceived(sender, messageType, payload)
-    if messageType == PACKET_RAW_LINK_DATA then
+    if messageType ==  PacketTypes.RAW_LINK_DATA then
         local data = tonumber(string.sub(payload, 1, 10))
         if data ~= 0 then
             _ReceiveMultiplayerPackets(data - 1000000000)
         end
-    elseif messageType == PACKET_RAW_POKEMON_DATA then
+    elseif messageType ==  PacketTypes.RAW_POKEMON_DATA then
         local PokeTemp2 = string.sub(payload, 1, 25)
         _SetPokemonData(PokeTemp2)
-    elseif messageType == PACKET_RAW_TRADE_DATA then
+    elseif messageType ==  PacketTypes.RAW_TRADE_DATA then
         for i = 1, 3 do
             EnemyTradeVars[i] = tonumber(string.sub(payload, i, i))
         end
         EnemyTradeVars[5] = string.sub(payload, 4, 43)
 
-    elseif messageType == PACKET_RAW_BATTLE_DATA then
+    elseif messageType ==  PacketTypes.RAW_BATTLE_DATA then
         for i = 1, 10 do
             EnemyBattleVars[i] = tonumber(string.sub(payload, i, i))
         end
     else
-        if messageType == PACKET_REQUEST_POKEMON then
+        if messageType ==  PacketTypes.REQUEST_POKEMON then
             _GetPokemonTeam()
             _SendRawPokemonData()
-        elseif messageType == PACKET_REQUEST_BATTLE then
+        elseif messageType ==  PacketTypes.REQUEST_BATTLE then
             --If player requests for a battle
             if (_IsBusy() or LockFromScript ~= 0) then
-                _SendToPlayer(PACKET_TOO_BUSY)
+                _SendToPlayer( PacketTypes.TOO_BUSY)
             else
                 OtherPlayerHasCancelled = 0
                 LockFromScript = 10
                 TargetPlayer = sender
                 _Loadscript(10)
             end
-        elseif messageType == PACKET_REQUEST_TRADE then
+        elseif messageType ==  PacketTypes.REQUEST_TRADE then
             --If player requests for a trade
             if (_IsBusy() or LockFromScript ~= 0) then
-                _SendToPlayer(PACKET_TOO_BUSY)
+                _SendToPlayer( PacketTypes.TOO_BUSY)
             else
                 OtherPlayerHasCancelled = 0
                 LockFromScript = 11
                 TargetPlayer = sender
                 _Loadscript(6)
             end
-        elseif messageType == PACKET_CANCEL_BATTLE and sender == TargetPlayer then
+        elseif messageType ==  PacketTypes.CANCEL_BATTLE and sender == TargetPlayer then
             --If player cancels battle
             OtherPlayerHasCancelled = 1
-        elseif messageType == PACKET_CANCEL_TRADE and sender == TargetPlayer then
+        elseif messageType ==  PacketTypes.CANCEL_TRADE and sender == TargetPlayer then
             --If player cancels trade
             OtherPlayerHasCancelled = 2
-        elseif messageType == PACKET_TOO_BUSY and sender == TargetPlayer and LockFromScript == 4 then
+        elseif messageType ==  PacketTypes.TOO_BUSY and sender == TargetPlayer and LockFromScript == 4 then
             --If player is too busy to battle
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -1806,7 +1800,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 5
             end
-        elseif messageType == PACKET_TOO_BUSY and sender == TargetPlayer and LockFromScript == 5 then
+        elseif messageType ==  PacketTypes.TOO_BUSY and sender == TargetPlayer and LockFromScript == 5 then
             --If player is too busy to trade
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -1814,7 +1808,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 6
             end
-        elseif messageType == PACKET_ACCEPT_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
+        elseif messageType ==  PacketTypes.ACCEPT_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
             --If player accepts your battle request
             _RequestRawPokemonData()
             if Var8000[2] ~= 0 then
@@ -1823,7 +1817,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 1
             end
-        elseif messageType == PACKET_ACCEPT_TRADE and sender == TargetPlayer and LockFromScript == 5 then
+        elseif messageType ==  PacketTypes.ACCEPT_TRADE and sender == TargetPlayer and LockFromScript == 5 then
             --If player accepts your trade request
             _RequestRawPokemonData()
             if Var8000[2] ~= 0 then
@@ -1831,7 +1825,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 2
             end
-        elseif messageType == PACKET_DECLINE_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
+        elseif messageType ==  PacketTypes.DECLINE_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
             --If player denies your battle request
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -1839,7 +1833,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 3
             end
-        elseif messageType == PACKET_DECLINE_TRADE and sender == TargetPlayer and LockFromScript == 5 then
+        elseif messageType ==  PacketTypes.DECLINE_TRADE and sender == TargetPlayer and LockFromScript == 5 then
             --If player denies your trade request
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -1847,17 +1841,17 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 4
             end
-        elseif messageType == PACKET_REFUSE_TRADE_OFFER and sender == TargetPlayer and LockFromScript == 9 then
+        elseif messageType ==  PacketTypes.REFUSE_TRADE_OFFER and sender == TargetPlayer and LockFromScript == 9 then
             --If player refuses trade offer
             OtherPlayerHasCancelled = 3
-        elseif messageType == PACKET_PLAYER_UPDATE then
+        elseif messageType == PacketTypes.PLAYER_UPDATE then
             local player = PlayerProxies[sender]
             if player == nil then
                 player = NewPlayerProxy()
                 PlayerProxies[sender] = player
             end
             _OnRemotePlayerUpdate(player, payload)
-        elseif messageType == PACKET_PLAYER_EXIT then
+        elseif messageType ==  PacketTypes.PLAYER_EXIT then
             PlayerProxies[sender] = nil
         else
             console:log("Received unknown packet type \"" .. messageType .. "\". This may indicate that the client is a little outdated.")
@@ -1909,7 +1903,7 @@ local function OnKeysRead()
                 _Loadscript(3)
                 Keypressholding = 1
                 Keypress = 1
-                --			SendToPlayer(PACKET_REQUEST_BATTLE)
+                --			SendToPlayer( PacketTypes.REQUEST_BATTLE)
 
             elseif Var8000[1] == 2 then
                 --			console:log("Trade selected")
@@ -1918,7 +1912,7 @@ local function OnKeysRead()
                 _Loadscript(4)
                 Keypressholding = 1
                 Keypress = 1
-                _SendToPlayer(PACKET_REQUEST_TRADE)
+                _SendToPlayer( PacketTypes.REQUEST_TRADE)
 
             elseif Var8000[1] == 3 then
                 --			console:log("Card selected")
@@ -1944,7 +1938,7 @@ local function OnKeysRead()
             --SCRIPTS. LOCK AND PREVENT SPAM PRESS.
             if LockFromScript == 0 and Keypressholding == 0 and not _IsBusy() then
                 --HIDE N SEEK AT DESK IN ROOM
-                if MasterClient == "h" and LocalPlayerCurrentDirection == 3 and LocalPlayerCurrentX == -991 and LocalPlayerCurrentY == -991 and LocalPlayerMapID == 260 then
+                if MasterClient == "h" and LocalPlayer.CurrentDirection == 3 and LocalPlayer.Current.X == -991 and LocalPlayer.Current.Y == -991 and LocalPlayer.MapID == 260 then
                     --Server config through bedroom drawer
                     --For temp ram to load up script in 145227776 - 08A80000
                     --8004 is the temp var to get yes or no
@@ -1953,19 +1947,19 @@ local function OnKeysRead()
                 end
                 --Interact with players
                 for nick, player in pairs(PlayerProxies) do
-                    TalkingDirX = LocalPlayerCurrentX - player.CurrentX
-                    TalkingDirY = LocalPlayerCurrentY - player.CurrentY
-                    if LocalPlayerCurrentDirection == 1 and TalkingDirX == 1 and TalkingDirY == 0 then
+                    TalkingDirX = LocalPlayer.Current.X - player.Current.X
+                    TalkingDirY = LocalPlayer.Current.Y - player.Current.Y
+                    if LocalPlayer.CurrentDirection == 1 and TalkingDirX == 1 and TalkingDirY == 0 then
                         --		console:log("Player Left")
 
-                    elseif LocalPlayerCurrentDirection == 2 and TalkingDirX == -1 and TalkingDirY == 0 then
+                    elseif LocalPlayer.CurrentDirection == 2 and TalkingDirX == -1 and TalkingDirY == 0 then
                         --		console:log("Player Right")
-                    elseif LocalPlayerCurrentDirection == 3 and TalkingDirY == 1 and TalkingDirX == 0 then
+                    elseif LocalPlayer.CurrentDirection == 3 and TalkingDirY == 1 and TalkingDirX == 0 then
                         --		console:log("Player Up")
-                    elseif LocalPlayerCurrentDirection == 4 and TalkingDirY == -1 and TalkingDirX == 0 then
+                    elseif LocalPlayer.CurrentDirection == 4 and TalkingDirY == -1 and TalkingDirX == 0 then
                         --		console:log("Player Down")
                     end
-                    if (LocalPlayerCurrentDirection == 1 and TalkingDirX == 1 and TalkingDirY == 0) or (LocalPlayerCurrentDirection == 2 and TalkingDirX == -1 and TalkingDirY == 0) or (LocalPlayerCurrentDirection == 3 and TalkingDirX == 0 and TalkingDirY == 1) or (LocalPlayerCurrentDirection == 4 and TalkingDirX == 0 and TalkingDirY == -1) then
+                    if (LocalPlayer.CurrentDirection == 1 and TalkingDirX == 1 and TalkingDirY == 0) or (LocalPlayer.CurrentDirection == 2 and TalkingDirX == -1 and TalkingDirY == 0) or (LocalPlayer.CurrentDirection == 3 and TalkingDirX == 0 and TalkingDirY == 1) or (LocalPlayer.CurrentDirection == 4 and TalkingDirX == 0 and TalkingDirY == -1) then
 
                         --		console:log("Player Any direction")
                         emu:write16(Var8000Adr[1], 0)
@@ -1982,12 +1976,12 @@ local function OnKeysRead()
             if LockFromScript == 4 and Keypressholding == 0 and Var8000[2] ~= 0 then
                 --Cancel battle request
                 _Loadscript(15)
-                _SendToPlayer(PACKET_CANCEL_BATTLE)
+                _SendToPlayer( PacketTypes.CANCEL_BATTLE)
                 LockFromScript = 0
             elseif LockFromScript == 5 and Keypressholding == 0 and Var8000[2] ~= 0 then
                 --Cancel trade request
                 _Loadscript(16)
-                _SendToPlayer(PACKET_CANCEL_TRADE)
+                _SendToPlayer( PacketTypes.CANCEL_TRADE)
                 LockFromScript = 0
                 TradeVars[1] = 0
                 TradeVars[2] = 0
@@ -1996,7 +1990,7 @@ local function OnKeysRead()
             elseif LockFromScript == 9 and (TradeVars[1] == 2 or TradeVars[1] == 4) and Keypressholding == 0 and Var8000[2] ~= 0 then
                 --Cancel trade request
                 _Loadscript(16)
-                _SendToPlayer(PACKET_CANCEL_TRADE)
+                _SendToPlayer( PacketTypes.CANCEL_TRADE)
                 LockFromScript = 0
                 TradeVars[1] = 0
                 TradeVars[2] = 0
@@ -2059,7 +2053,7 @@ local function UpdateGameState()
     if payload ~= LastSposPayload then
         if LastSposPayload ~= "" then
             SendToServer(
-                PACKET_PLAYER_UPDATE,
+                PacketTypes.PLAYER_UPDATE,
                 GetStatePayload(payload)
             )
         end
