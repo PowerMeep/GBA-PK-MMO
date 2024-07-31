@@ -83,6 +83,7 @@ local TargetPlayer = "00000000"
 local PlayerProxies = {}
 
 -- LOCAL PLAYER VARS
+--- Camera can be between -16 and 16 and is to get the camera movement while moving
 local Camera = {X=0, Y=0}
 
 --- ???
@@ -1035,20 +1036,21 @@ end
 --- Create a table to track a remote player
 local function NewPlayerProxy()
     local Proxy = {
-        AnimationX=0,
-        AnimationY=0,
-        FutureX=0,
-        FutureY=0,
-        CurrentX=0,
-        CurrentY=0,
-        PreviousX=0,
-        PreviousY=0,
-        StartX=2000,
-        StartY=2000,
-        DifferentMapX=0,
-        DifferentMapY=0,
-        RelativeX=0,
-        RelativeY=0,
+        --- Range is -16 - 16 and is purely to animate sprites
+        Animation    = {X=0, Y=0},
+        --- The future position, which the proxy will move toward
+        Future       = {X=0, Y=0},
+        --- The current, rendered position of this proxy
+        Current      = {X=0, Y=0},
+        --- The previous position of this proxy, used for map change calculations
+        Previous     = {X=0, Y=0},
+        --- The coordinate that this proxy entered a new map on
+        Start        = {X=2000, Y=2000},
+        --- ? The coordinate of this proxy relative to a different map?
+        DifferentMap = {X=0, Y=0},
+        --- The coordinate of this proxy relative to the screen, used to calculate visibility
+        Relative     = {X=0, Y=0},
+        --- The direction this proxy is facing
         CurrentFacingDirection=Directions.up,
         --- The map this player is currently on
         CurrentMapID=0,
@@ -1063,7 +1065,6 @@ local function NewPlayerProxy()
         --- Whether this player could be visible to us
         --- True if we either share map ids or previous map ids
         PlayerVis=0,
-
         --- Whether this player is hitting a wall
         HittingWall=0,
         --- Used to determine whether to draw the battle symbol
@@ -1075,11 +1076,13 @@ local function NewPlayerProxy()
         --- The animation within the group that is playing
         --- with 0 being guaranteed as default / idle
         AnimationIndex=0,
-        -- Surf sprite frame number and target image
+        --- Surf sprite frame number
         SurfAnimationFrame=0,
+        --- Surf sprite target image
         SurfSprite=SharedSpriteLabels.surf_idle_down_1,
-        -- Player sprite frame number and target image
+        --- Player sprite frame number
         PlayerAnimationFrame=0,
+        --- Player sprite target image
         PlayerSprite=PlayerSpriteLabels.foot_idle_down
     }
 
@@ -1168,48 +1171,40 @@ local function _UpdatePlayerVisibility(player)
     -- First, we check whether a player is on this or a map we know to be adjacent.
     -- If this player is on the same map as us
     if LocalPlayerMapID == player.CurrentMapID then
-        player.DifferentMapX = 0
-        player.DifferentMapY = 0
+        player.DifferentMap.X = 0
+        player.DifferentMap.Y = 0
         player.MapChange = 0
     -- If this player is on a map we know to be adjacent to the one we are on
     elseif (LocalPlayerMapIDPrev == player.CurrentMapID or LocalPlayerMapID == player.PreviousMapID) and player.MapEntranceType == 0 then
         if player.MapChange == 1 then
-            player.DifferentMapX = ((player.PreviousX - player.StartX) * 16)
-            player.DifferentMapY = ((player.PreviousY - player.StartY) * 16)
+            player.DifferentMap.X = ((player.Previous.X - player.Start.X) * 16)
+            player.DifferentMap.Y = ((player.Previous.Y - player.Start.Y) * 16)
         end
     else
         player.PlayerVis = 0
-        player.DifferentMapX = 0
-        player.DifferentMapY = 0
+        player.DifferentMap.X = 0
+        player.DifferentMap.Y = 0
         player.MapChange = 0
         return
     end
 
     if LocalPlayerMapEntranceType == 0 and (LocalPlayerMapIDPrev == player.CurrentMapID or LocalPlayerMapID == player.PreviousMapID) and player.MapChange == 0 then
-        --AnimationX is -16 - 16 and is purely to animate sprites
-        --Camera.X can be between -16 and 16 and is to get the camera movement while moving
-        --Current X is the X the current sprite has
-        --Player X is the X the player sprite has
         --112 and 56 = middle of screen
-        player.RelativeX = player.AnimationX + Camera.X + ((player.CurrentX - LocalPlayerCurrent.X) * 16) + player.DifferentMapX + LocalPlayerDifferentMap.X + 112
-        player.RelativeY = player.AnimationY + Camera.Y + ((player.CurrentY - LocalPlayerCurrent.Y) * 16) + player.DifferentMapY + LocalPlayerDifferentMap.Y + 56
+        player.Relative.X = player.Animation.X + Camera.X + ((player.Current.X - LocalPlayerCurrent.X) * 16) + player.DifferentMap.X + LocalPlayerDifferentMap.X + 112
+        player.Relative.Y = player.Animation.Y + Camera.Y + ((player.Current.Y - LocalPlayerCurrent.Y) * 16) + player.DifferentMap.Y + LocalPlayerDifferentMap.Y + 56
     else
-        player.RelativeX = player.AnimationX + Camera.X + ((player.CurrentX - LocalPlayerCurrent.X) * 16) + player.DifferentMapX + 112
-        player.RelativeY = player.AnimationY + Camera.Y + ((player.CurrentY - LocalPlayerCurrent.Y) * 16) + player.DifferentMapY + 56
+        player.Relative.X = player.Animation.X + Camera.X + ((player.Current.X - LocalPlayerCurrent.X) * 16) + player.DifferentMap.X + 112
+        player.Relative.Y = player.Animation.Y + Camera.Y + ((player.Current.Y - LocalPlayerCurrent.Y) * 16) + player.DifferentMap.Y + 56
     end
 
     -- Next, we check whether the player is within our screen space
-    --This is for the bike + surf
-    if player.AnimationGroup ~= 0 then
+    if player.AnimationGroup ~= AnimationGroups.on_foot then
         MinX = -8
-    -- FIXME: never used. The range of 33-40 is completely within the range of 17-40
-    -- elseif player.AnimationIndex >= 33 and player.AnimationIndex <= 40 then
-    --    MinX = 8
     else
         MinX = -16
     end
 
-    if player.RelativeX > MaxX or player.RelativeX < MinX or player.RelativeY > MaxY or player.RelativeY < MinY then
+    if player.Relative.X > MaxX or player.Relative.X < MinX or player.Relative.Y > MaxY or player.Relative.Y < MinY then
         player.PlayerVis = 0
     else
         player.PlayerVis = 1
@@ -1229,23 +1224,23 @@ local function _AnimatePlayerMovement(player)
     if speed == nil or player.HittingWall == 1 or player.IsInBattle == 1 then speed = 0 end
 
     -- If we have received a new packet, snap the current position to match
-    if player.FutureX ~= 0 then
+    if player.Future.X ~= 0 then
         if speed > 0 then
-            player.CurrentX = player.FutureX - deltas[1]
-            player.CurrentY = player.FutureY - deltas[2]
+            player.Current.X = player.Future.X - deltas[1]
+            player.Current.Y = player.Future.Y - deltas[2]
         else
-            player.CurrentX = player.FutureX
-            player.CurrentY = player.FutureY
+            player.Current.X = player.Future.X
+            player.Current.Y = player.Future.Y
         end
-        console:log(tostring(player.FutureX) .. ' ' .. tostring(player.FutureY))
-        console:log(tostring(player.CurrentX) .. ' ' .. tostring(player.CurrentY))
-        player.FutureX = 0
-        player.FutureY = 0
+        console:log(tostring(player.Future.X) .. ' ' .. tostring(player.Future.Y))
+        console:log(tostring(player.Current.X) .. ' ' .. tostring(player.Current.Y))
+        player.Future.X = 0
+        player.Future.Y = 0
     end
 
     if speed > 0 then
-        player.CurrentX = player.CurrentX + (deltas[1] * speed)
-        player.CurrentY = player.CurrentY + (deltas[2] * speed)
+        player.Current.X = player.Current.X + (deltas[1] * speed)
+        player.Current.Y = player.Current.Y + (deltas[2] * speed)
     end
 
     -- Update the player sprite animation
@@ -1335,8 +1330,8 @@ local function _RenderPlayer(player, renderer)
     local isBiking = 0
     local isSurfing = 0
 
-    local FinalMapX = player.RelativeX
-    local FinalMapY = player.RelativeY
+    local FinalMapX = player.Relative.X
+    local FinalMapY = player.Relative.Y
 
     local FacingTemp = 128
     if player.CurrentFacingDirection == Directions.right then
@@ -1346,7 +1341,7 @@ local function _RenderPlayer(player, renderer)
 
     -- Biking
     -- FIXME: original range was not "all bike sprites"
-    if player.AnimationGroup == 1 then
+    if player.AnimationGroup == AnimationGroups.on_bike then
         isBiking = 1
         FinalMapX = FinalMapX - 8
         WriteIntegerArrayToEmu(renderer.spriteDataAddress - 80, FRLG.PlayerSprites[player.Gender][player.PlayerSprite])
@@ -1354,7 +1349,7 @@ local function _RenderPlayer(player, renderer)
 
     -- Surfing
     -- FIXME: original range was not "all surfing sprites"
-    elseif player.AnimationGroup == 2 then
+    elseif player.AnimationGroup == AnimationGroups.surfing then
         isSurfing = 1
         if player.SurfAnimationFrame >= FRLG.SurfingAnimation.total_frames/2 then
             FinalMapY = FinalMapY + 1
@@ -1402,7 +1397,7 @@ local function _OnRemotePlayerUpdate(player, payload)
     local x                       = tonumber(string.sub(payload,  5,  8)) - 2000
     local y                       = tonumber(string.sub(payload,  9, 12)) - 2000
     -- Three free bytes
-    player.AnimationGroup          = tonumber(string.sub(payload, 16, 16))
+    player.AnimationGroup         = tonumber(string.sub(payload, 16, 16))
     player.AnimationIndex         = tonumber(string.sub(payload, 17, 17))
     player.CurrentFacingDirection = tonumber(string.sub(payload, 18, 18))
     player.HittingWall            = tonumber(string.sub(payload, 19, 19))
@@ -1411,8 +1406,8 @@ local function _OnRemotePlayerUpdate(player, payload)
     local map                     = tonumber(string.sub(payload, 22, 27)) - 100000
     local prevMap                 = tonumber(string.sub(payload, 28, 33)) - 100000
     local mapEntranceType         = tonumber(string.sub(payload, 34, 34))
-    player.StartX                 = tonumber(string.sub(payload, 35, 38)) - 2000
-    player.StartY                 = tonumber(string.sub(payload, 39, 42)) - 2000
+    player.Start.X                = tonumber(string.sub(payload, 35, 38)) - 2000
+    player.Start.Y                = tonumber(string.sub(payload, 39, 42)) - 2000
     -- One free byte
 
     player.AnimateID = tonumber(string.sub(payload, 16, 17))
@@ -1428,17 +1423,17 @@ local function _OnRemotePlayerUpdate(player, payload)
         player.PreviousMapID = prevMap
         player.MapEntranceType = mapEntranceType
         -- Set the position of where they were last on their previous map
-        player.PreviousX = player.CurrentX
-        player.PreviousY = player.CurrentY
-        player.CurrentX = x
-        player.CurrentY = y
+        player.Previous.X = player.Current.X
+        player.Previous.Y = player.Current.Y
+        player.Current.X = x
+        player.Current.Y = y
         -- A flag indicating that this player has recently changed maps
         player.MapChange = 1
 
         -- TODO: this would be a great place to update map offsets and/or relative positions
     end
-    player.FutureX = x
-    player.FutureY = y
+    player.Future.X = x
+    player.Future.Y = y
 
     if DEBUG_GENDER_SWITCH then
         player.Gender = 1 - gender
@@ -1954,8 +1949,8 @@ local function OnKeysRead()
                 end
                 --Interact with players
                 for nick, player in pairs(PlayerProxies) do
-                    TalkingDirX = LocalPlayerCurrent.X - player.CurrentX
-                    TalkingDirY = LocalPlayerCurrent.Y - player.CurrentY
+                    TalkingDirX = LocalPlayerCurrent.X - player.Current.X
+                    TalkingDirY = LocalPlayerCurrent.Y - player.Current.Y
                     if LocalPlayerCurrentDirection == 1 and TalkingDirX == 1 and TalkingDirY == 0 then
                         --		console:log("Player Left")
 
