@@ -1034,6 +1034,8 @@ end
 --- Create a table to track a remote player
 local function NewPlayerProxy()
     local Proxy = {
+        --- The latency between this player and the server in milliseconds
+        Latency      = 0,
         --- Range is -16 - 16 and is purely to animate sprites
         Animation    = {X=0, Y=0},
         --- The future position, which the proxy will move toward
@@ -1389,7 +1391,7 @@ end
 
 --- This parses the payload and updates the values for a remote player that we are tracking.
 local function _OnRemotePlayerUpdate(player, payload)
-    -- Four free bytes
+    player.Latency                = tonumber(string.sub(payload,  1,  4))
     local x                       = tonumber(string.sub(payload,  5,  8)) - 2000
     local y                       = tonumber(string.sub(payload,  9, 12)) - 2000
     -- Three free bytes
@@ -2063,9 +2065,9 @@ end
 --- Returns a nice, readable string representation of the game's state.
 --- Displayed in the console below connection information.
 local function GetStateForConsole()
-    local out = "Nearby Players:"
+    local out = "Nearby Players:\n"
     for nick, data in pairs(PlayerProxies) do
-        out = out .. nick .. "|" .. data.AnimationGroup .. ":" .. data.AnimationIndex .. ":" .. data.CurrentFacingDirection .. ":" .. data.HittingWall .. "|" .. data.Gender .. ":" .. tostring(data.SurfSprite) .. ":" .. tostring(data.PlayerSprite) .. "\n"
+        out = out .. nick .. " (" .. tostring(data.Latency) .. " ms)\n"
     end
     return out
 end

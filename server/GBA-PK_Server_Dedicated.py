@@ -122,7 +122,7 @@ class Client:
                  addr):
         self.sock: socket.socket = sock
         self.sock.settimeout(10)
-        self.latency = 0
+        self.latency = '0000'
         self.addr = addr
         self.version = MIN_SUPPORTED_CLIENT_VERSION
         self.nick = '0000'
@@ -282,8 +282,8 @@ class Client:
 
             self.get_visible_players()
 
-        # Replace the "recipient" with the server_nick
-        scrubbed_packet = packet[:8] + server_nick + PACKET_TYPE_POS + packet[20:]
+        # Replace the "recipient" with the server_nick and inject latency from most recent pingpong
+        scrubbed_packet = packet[:8] + server_nick + PACKET_TYPE_POS + self.latency + packet[24:]
 
         self.last_spos = scrubbed_packet
         self.distribute(scrubbed_packet)
