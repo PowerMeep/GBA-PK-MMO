@@ -115,7 +115,7 @@ local function FormatNickname()
     local nickLength = 8
     Nickname = Utils.Trim(Config.Name)
     if Nickname == nil or string.len(Nickname) == 0 then
-        console:log("Nickname not set, generating a random one. You can set this in the client script.")
+        console:log("Nickname not set, generating a random one. You can set this in Config.lua")
         local res = ""
         for _ = 1, nickLength do
             res = res .. string.char(math.random(97, 122))
