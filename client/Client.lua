@@ -146,13 +146,13 @@ end
 -- V1 (Original)
 -- [4 byte GameID][4 byte Nickname][4 byte SenderID][4 byte RecipientID][4 byte PacketType][43 byte Payload][U]
 --
--- V2 (Current)
+-- V2
 -- [8 byte SenderID][8 byte RecpientID][4 byte PacketType][43 byte Payload][U]
 -- By sending GameID only when joining the game, and by consolidating the nickname and numeric ids into
 -- a single field, we can repurpose the first 16 bytes into clean 8 byte sender and recipient IDs. The rest of the packet
 -- remains the same, thus most of the parsing code is left alone.
 --
--- V3
+-- V3 (Current)
 -- [8 byte SenderID][4 byte PacketType][51 byte Payload][U]
 -- The vast majority of the packets being sent won't _have_ an intended recipient.
 -- The bytes reserved for that would be unused. This approach makes the recipientID part of the payload,
@@ -168,28 +168,23 @@ end
 
 --- Function to format a packet and send it.
 --- Global function so it's available to any module that might need it.
-function SendData(PacketType, Recipient, Payload)
+function SendData(PacketType, Payload)
     -- If we didn't get a payload at all, initialize to empty string
     if Payload == nil then Payload = "" end
 
     -- If the payload is less than 43 characters long, add filler
     local PayloadLen = string.len(Payload)
-    if PayloadLen < 43 then
-        Payload = Payload .. string.rep("0", 43 - PayloadLen)
+    if PayloadLen < 51 then
+        Payload = Payload .. string.rep("0", 51 - PayloadLen)
     end
 
     -- If the payload is greater than the maximum, block it and report an error
-    if PayloadLen > 43 then
+    if PayloadLen > 51 then
         console:log("Error - tried to send a " .. PacketType .. " packet that was too long")
     else
-        local Packet = Nickname .. Recipient .. PacketType .. Payload .. "U"
+        local Packet = Nickname .. PacketType .. Payload .. "U"
         SocketMain:send(Packet)
     end
-end
-
---- Helper function to address the packet to the server itself.
-function SendToServer(PacketType, Payload)
-    SendData(PacketType, ServerName, Payload)
 end
 
 --- Called by the socket anytime data is available to be consumed.
@@ -209,12 +204,10 @@ local function OnDataReceived()
 
     --- Where this packet originated from.
     local sender      = string.sub(ReadData, 1, 8)
-    --- The intended recipient for this packet. This should be equal to our Nickname.
-    local recipient   = string.sub(ReadData, 9, 16)
     --- The type of data in the packet.
-    local messageType = string.sub(ReadData, 17, 20)
+    local messageType = string.sub(ReadData, 9, 12)
     --- The data that was received
-    local payload     = string.sub(ReadData, 21, 63)
+    local payload     = string.sub(ReadData, 13, 63)
 
 
     if messageType == PacketTypes.SERVER_START then
@@ -241,7 +234,7 @@ local function OnDataReceived()
         SocketMain:close()
         console:log(ErrorMessage)
     elseif messageType == PacketTypes.PING then
-        SendToServer(PacketTypes.PONG, payload)
+        SendData(PacketTypes.PONG, payload)
     elseif messageType == PacketTypes.PINGPONG then
         Latency = tonumber(string.sub(payload, 1,4))
     else
@@ -256,7 +249,7 @@ local function ConnectToServer()
     local success, _ = SocketMain:connect(Config.Host, Config.Port)
     if success then
         console:log("Joining game...")
-        SendData(PacketTypes.JOIN_SERVER, LoadedGame.Version .. LoadedGame.GameID, LoadedGame.GetStatePayload())
+        SendData(PacketTypes.JOIN_SERVER, LoadedGame.Version .. LoadedGame.GameID .. LoadedGame.GetStatePayload())
         SocketMain:add("received", OnDataReceived)
     else
         console:log("Could not connect to server.")

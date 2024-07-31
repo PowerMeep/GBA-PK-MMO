@@ -41,7 +41,7 @@ PACKET_TYPE_PONG     = 'PONG'
 PACKET_TYPE_PINGPONG = 'PNPN'
 
 # Deny reasons
-MIN_SUPPORTED_CLIENT_VERSION = 1019
+MIN_SUPPORTED_CLIENT_VERSION = 1020
 SUPPORTED_CHARS = re.compile('[a-zA-Z0-9._ -]+')
 PACKET_VAL_SERVER_FULL = 'FULL'
 PACKET_VAL_NAME_TAKEN  = 'NAME'
@@ -50,6 +50,7 @@ PACKET_VAL_GAME        = 'GAME'
 PACKET_VAL_BAD_CHARS   = 'CHRS'
 
 # Packet constants
+MAP_ID_PAYLOAD_INDEX = 21
 MAP_ENTRANCE_TYPE_NORMAL  = '0'
 MAP_ENTRANCE_TYPE_FADEOUT = '1'  # This doesn't seem to update much
 # Apparently, this list goes up to 10?
@@ -139,24 +140,24 @@ class Client:
             self.logger.warning(f'Client {self.addr} turned away, no initial packet received.')
             return False
 
-        join = packet[16:20]
+        join = packet[8:12]
         if not join == PACKET_TYPE_JOIN:
             self.logger.warning(f'Client {self.addr} turned away, initial packet malformed.')
             self.send_packet(PACKET_TYPE_DENY, PACKET_VAL_MALFORMED)
             return False
 
         # Version check goes first because once we know this, we know what to expect from this client.
-        self.version = int(packet[8:12])
+        self.version = int(packet[12:16])
         if self.version < MIN_SUPPORTED_CLIENT_VERSION:
             self.logger.warning(f'Client {self.addr} turned away, client version outdated '
                                 f'({self.version} < {MIN_SUPPORTED_CLIENT_VERSION}).')
             self.send_packet(PACKET_TYPE_DENY, str(MIN_SUPPORTED_CLIENT_VERSION))
             return False
 
-        # nick     version gameid type payload                                      U
-        # asdfghjk 1001    BPR1   JOIN 1000 20002000100101000100000100000020001999F U
+        # nick     type version gameid payload                                     U
+        # asdfghjk JOIN 1001    BPR1   100020002000100101000100000100000020001999F U
         self.nick = packet[:8]
-        game = packet[12:16]
+        game = packet[16:20]
 
         if not re.match(SUPPORTED_CHARS, self.nick):
             self.logger.warning(f'Client {self.addr} turned away, name "{self.nick}" contained invalid characters.')
@@ -193,7 +194,8 @@ class Client:
         )
         clients_by_nick[self.nick] = self
         self.logger.warning(f'Adding client {self.addr} -> "{self.nick}"')
-        self.update_positions(packet)
+        # The payload is shifted to the right here
+        self.update_positions(packet[:8], packet[20:])
         report()
         return True
 
@@ -226,48 +228,50 @@ class Client:
 
     def on_raw_packet(self, packet):
         packet = str(packet)
+        self.logger.debug(f'>>> {packet}')
         if len(packet) < 64:
-            self.logger.warning(packet)
+            self.logger.warning('Received packet was too short.')
             return
 
-        recipient         = packet[8:16]
-        packet_type       = packet[16:20]
-
-        the_letter_u      = packet[63]
+        the_letter_u = packet[63]
         if not the_letter_u == 'U':
-            self.logger.error('Malformed packet did not end with a U')
+            self.logger.error('Malformed packet did not end with a U.')
             return
 
-        self.logger.debug(packet)
-
+        packet_type = packet[8:12]
         if packet_type == PACKET_TYPE_POS:
-            self.update_positions(packet)
+            self.update_positions(packet[:8], packet[12:])
         elif packet_type == PACKET_TYPE_PONG:
-            index_of_padding = packet.find('F', 24)
+            index_of_padding = packet.find('F', 12)
             if index_of_padding >= 0:
-                self.logger.debug('Received PONG')
                 try:
                     # Subtract timestamp in message from current millis
                     # Bound to 4-digit number between 0 and 9999
+                    time_ping_sent = int(packet[12:index_of_padding])
+                    now = round(time.time() * 1000)
+                    latency = now - time_ping_sent
                     self.latency = f'{max(
                         0, min(
-                            round(time.time() * 1000) - int(packet[20:index_of_padding]),
+                            latency,
                             9999
                         )
                     ):04}'
                     self.send_packet(PACKET_TYPE_PINGPONG, self.latency)
                 except ValueError:
-                    self.logger.debug('PONG did not have a numeric timestamp')
+                    self.logger.warning(f'Received packet {packet_type} did not have a numeric timestamp.')
             self.unresponded_pings = 0
-        elif recipient in clients_by_nick:
-            clients_by_nick[recipient].send_raw(packet)
         else:
-            self.logger.warning(packet)
+            recipient = packet[12:20]
+            if recipient in clients_by_nick:
+                clients_by_nick[recipient].send_raw(packet)
+            else:
+                self.logger.warning(f'Received packet {packet_type} was for unknown player {recipient}.')
 
-    def update_positions(self, packet):
-        map_id            = packet[41:47]
-        map_id_prev       = packet[47:53]
-        map_entrance_type = packet[53]
+    def update_positions(self, nick, payload):
+        map_id            = payload[MAP_ID_PAYLOAD_INDEX:MAP_ID_PAYLOAD_INDEX+6]
+        map_id_prev       = payload[MAP_ID_PAYLOAD_INDEX+6:MAP_ID_PAYLOAD_INDEX+12]
+        map_entrance_type = payload[MAP_ID_PAYLOAD_INDEX+12]
+        self.logger.debug(f'{payload} > {map_id}')
         if map_id != self.map_id:
 
             if self.map_id is not None:
@@ -282,8 +286,9 @@ class Client:
 
             self.get_visible_players()
 
-        # Replace the "recipient" with the server_nick and inject latency from most recent pingpong
-        scrubbed_packet = packet[:8] + server_nick + PACKET_TYPE_POS + self.latency + packet[24:]
+        # Inject latency from most recent pingpong
+        scrubbed_packet = nick + PACKET_TYPE_POS + self.latency + payload[4:]
+        scrubbed_packet = scrubbed_packet + ('U' * (64 - len(scrubbed_packet)))
 
         self.last_spos = scrubbed_packet
         self.distribute(scrubbed_packet)
@@ -300,10 +305,7 @@ class Client:
             for client in list(clients_by_map_id.get(map_id, [])):
                 if client == self:
                     continue
-                # Fudge that this packet is INTENDED for this recipient.
-                # May not be necessary. Further analysis needed.
-                modded_packet = packet[:8] + client.nick + packet[16:]
-                client.send_raw(modded_packet)
+                client.send_raw(packet)
 
     def get_visible_players(self):
         neighbors = list(walkable_exits_by_map_id.get(self.map_id, {}))
@@ -312,14 +314,11 @@ class Client:
             for client in list(clients_by_map_id.get(map_id, [])):
                 if client == self:
                     continue
-                # Fudge that this packet is INTENDED for this recipient.
-                # May not be necessary. Further analysis needed.
-                modded_packet = client.last_spos[:8] + client.nick + client.last_spos[16:]
-                self.send_raw(modded_packet)
+                self.send_raw(client.last_spos)
 
     def send_raw(self, message):
         try:
-            self.logger.debug('Sending message')
+            self.logger.debug(f'<<< {message}')
             self.sock.send(message.encode('UTF-8'))
         except IOError:
             self.logger.error('Could not send message, socket closed.')
@@ -330,7 +329,6 @@ class Client:
                     payload=""):
         packet = (
             str(server_nick) +
-            str(self.nick) +
             str(packet_type) +
             str(payload)
         )
@@ -339,10 +337,9 @@ class Client:
         self.send_raw(packet)
 
     def send_exit_packet_from(self, client):
-        self.send_raw(f'{client.nick}{self.nick}{PACKET_TYPE_EXIT}{"0" * 42}FU')
+        self.send_raw(f'{client.nick}{PACKET_TYPE_EXIT}{"0" * 50}FU')
 
     def distribute_exit_to_neighbors(self, difference=None):
-        self.logger.debug('Sending EXIT packet')
         neighbors = set(walkable_exits_by_map_id.get(self.map_id, {}))
         neighbors.add(self.map_id)
         if difference is not None:
@@ -357,11 +354,10 @@ class Client:
 
     def ping(self):
         if self.unresponded_pings >= missed_pongs:
-            self.logger.warning(f'Disconnecting due to inactivity.')
+            self.logger.warning('Disconnecting due to inactivity.')
             self.disconnect()
             self.teardown()
         else:
-            self.logger.debug(f'Sending PING.')
             self.unresponded_pings += 1
             # This should function like a ping and stop the client from timing out so aggressively
             self.send_packet(
@@ -376,7 +372,7 @@ class Client:
 
     def teardown(self):
         self.running = False
-        self.logger.warning(f'Removing client {self.addr} -> "{self.nick}"')
+        self.logger.warning(f'Removing client {self.addr}')
         if self.nick in clients_by_nick:
             del(clients_by_nick[self.nick])
             self.distribute_exit_to_neighbors()

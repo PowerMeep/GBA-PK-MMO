@@ -13,7 +13,7 @@ local mod = {}
 local MAX_RENDERED_PLAYERS = 8
 
 --- Version number for this client script. Used to track compatibility with the server.
-local VERSION_NUMBER = 1019
+local VERSION_NUMBER = 1020
 
 --- Flip the gender of remote players. Used for debugging sprites.
 local DEBUG_GENDER_SWITCH = false
@@ -151,7 +151,7 @@ local EnemyPokemon = { "", "", "", "", "", "" }
 -- NETWORKING ----------------------------------------------------------------------------------------------------------
 --- Helper method to slip the target player id into the packet as the destination.
 local function _SendToPlayer(PacketType, Payload)
-    SendData(PacketType, TargetPlayer, Payload)
+    SendData(PacketType, TargetPlayer .. Payload)
 end
 
 --- Helper method to ask another player for their pokemon data.
@@ -1729,8 +1729,6 @@ local function _GetPartialPayload()
     Payload = Payload .. (LocalPlayer.Start.X + 2000)
     Payload = Payload .. (LocalPlayer.Start.Y + 2000)
 
-    -- More padding
-    Payload = Payload .. "0"
     return Payload
 end
 
@@ -1853,6 +1851,7 @@ local function OnDataReceived(sender, messageType, payload)
             _OnRemotePlayerUpdate(player, payload)
         elseif messageType ==  PacketTypes.PLAYER_EXIT then
             PlayerProxies[sender] = nil
+            console:log("Removing player " .. sender)
         else
             console:log("Received unknown packet type \"" .. messageType .. "\". This may indicate that the client is a little outdated.")
         end
@@ -2052,7 +2051,7 @@ local function UpdateGameState()
     local payload = _GetPartialPayload()
     if payload ~= LastSposPayload then
         if LastSposPayload ~= "" then
-            SendToServer(
+            SendData(
                 PacketTypes.PLAYER_UPDATE,
                 GetStatePayload(payload)
             )
