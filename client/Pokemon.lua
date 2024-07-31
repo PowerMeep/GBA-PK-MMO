@@ -83,11 +83,10 @@ local TargetPlayer = "00000000"
 local PlayerProxies = {}
 
 -- LOCAL PLAYER VARS
-local CameraX = 0
-local CameraY = 0
--- ???
-local LocalPlayerMapXMovePrev = 0
-local LocalPlayerMapYMovePrev = 0
+local Camera = {X=0, Y=0}
+
+--- ???
+local LocalPlayerMapMovePrev = {X=0, Y=0}
 --- The ID of the current map
 local LocalPlayerMapID = 0
 --- The ID of the previous map
@@ -100,18 +99,15 @@ local LocalPlayerMapChange = 0
 --- Initialize to up, because it conveys to other players that you might not
 --- quite be ready yet.
 local LocalPlayerCurrentDirection = Directions.up
--- ??? This may represent the offset of the current map to the previous.
-local LocalPlayerDifferentMapX = 0
-local LocalPlayerDifferentMapY = 0
--- The current position
-local LocalPlayerCurrentX = 0
-local LocalPlayerCurrentY = 0
--- The previous position
-local LocalPlayerPreviousX = 0
-local LocalPlayerPreviousY = 0
--- This is the coordinate that the player entered this map on
-local LocalPlayerStartX = 0
-local LocalPlayerStartY = 0
+--- ??? This may represent the offset of the current map to the previous.
+local LocalPlayerDifferentMap = {X=0, Y=0}
+--- The current position
+local LocalPlayerCurrent = {X=0, Y=0}
+--- The previous position
+local LocalPlayerPrevious = {X=0, Y=0}
+--- This is the coordinate that the player entered this map on
+local LocalPlayerStart = {X=0, Y=0}
+
 --- Whether this player is male or female (0 = Male, 1 = Female)
 local LocalPlayerGender = Genders.male
 --- Whether this player is hitting a wall
@@ -1191,15 +1187,15 @@ local function _UpdatePlayerVisibility(player)
 
     if LocalPlayerMapEntranceType == 0 and (LocalPlayerMapIDPrev == player.CurrentMapID or LocalPlayerMapID == player.PreviousMapID) and player.MapChange == 0 then
         --AnimationX is -16 - 16 and is purely to animate sprites
-        --CameraX can be between -16 and 16 and is to get the camera movement while moving
+        --Camera.X can be between -16 and 16 and is to get the camera movement while moving
         --Current X is the X the current sprite has
         --Player X is the X the player sprite has
         --112 and 56 = middle of screen
-        player.RelativeX = player.AnimationX + CameraX + ((player.CurrentX - LocalPlayerCurrentX) * 16) + player.DifferentMapX + LocalPlayerDifferentMapX + 112
-        player.RelativeY = player.AnimationY + CameraY + ((player.CurrentY - LocalPlayerCurrentY) * 16) + player.DifferentMapY + LocalPlayerDifferentMapY + 56
+        player.RelativeX = player.AnimationX + Camera.X + ((player.CurrentX - LocalPlayerCurrent.X) * 16) + player.DifferentMapX + LocalPlayerDifferentMap.X + 112
+        player.RelativeY = player.AnimationY + Camera.Y + ((player.CurrentY - LocalPlayerCurrent.Y) * 16) + player.DifferentMapY + LocalPlayerDifferentMap.Y + 56
     else
-        player.RelativeX = player.AnimationX + CameraX + ((player.CurrentX - LocalPlayerCurrentX) * 16) + player.DifferentMapX + 112
-        player.RelativeY = player.AnimationY + CameraY + ((player.CurrentY - LocalPlayerCurrentY) * 16) + player.DifferentMapY + 56
+        player.RelativeX = player.AnimationX + Camera.X + ((player.CurrentX - LocalPlayerCurrent.X) * 16) + player.DifferentMapX + 112
+        player.RelativeY = player.AnimationY + Camera.Y + ((player.CurrentY - LocalPlayerCurrent.Y) * 16) + player.DifferentMapY + 56
     end
 
     -- Next, we check whether the player is within our screen space
@@ -1286,48 +1282,48 @@ local function _CalculateCamera()
 
     --if PlayerMapChange == 1 then
     --Update first if map change
-    LocalPlayerMapXMovePrev = emu:read16(33687132) - 8
-    LocalPlayerMapYMovePrev = emu:read16(33687134)
-    PlayerMapXMoveTemp = LocalPlayerMapXMovePrev % 16
-    PlayerMapYMoveTemp = LocalPlayerMapYMovePrev % 16
+    LocalPlayerMapMovePrev.X = emu:read16(33687132) - 8
+    LocalPlayerMapMovePrev.Y = emu:read16(33687134)
+    PlayerMapXMoveTemp = LocalPlayerMapMovePrev.X % 16
+    PlayerMapYMoveTemp = LocalPlayerMapMovePrev.Y % 16
 
     if LocalPlayerCurrentDirection == 1 then
-        CameraX = PlayerMapXMoveTemp * -1
+        Camera.X = PlayerMapXMoveTemp * -1
         --	console:log("XTEMP: " .. PlayerMapXMoveTemp)
     elseif LocalPlayerCurrentDirection == 2 then
         if PlayerMapXMoveTemp > 0 then
-            CameraX = 16 - PlayerMapXMoveTemp
+            Camera.X = 16 - PlayerMapXMoveTemp
         else
-            CameraX = 0
+            Camera.X = 0
         end
         --console:log("XTEMP: " .. PlayerMapXMoveTemp)
     elseif LocalPlayerCurrentDirection == 3 then
-        CameraY = PlayerMapYMoveTemp * -1
+        Camera.Y = PlayerMapYMoveTemp * -1
         --console:log("YTEMP: " .. PlayerMapYMoveTemp)
     elseif LocalPlayerCurrentDirection == 4 then
         --console:log("YTEMP: " .. PlayerMapYMoveTemp)
         if PlayerMapYMoveTemp > 0 then
-            CameraY = 16 - PlayerMapYMoveTemp
+            Camera.Y = 16 - PlayerMapYMoveTemp
         else
-            CameraY = 0
+            Camera.Y = 0
         end
     end
 
     --Calculations for X and Y of new map
-    if LocalPlayerMapChange == 1 and (CameraX == 0 and CameraY == 0) then
+    if LocalPlayerMapChange == 1 and (Camera.X == 0 and Camera.Y == 0) then
         LocalPlayerMapChange = 0
-        LocalPlayerStartX = LocalPlayerCurrentX
-        LocalPlayerStartY = LocalPlayerCurrentY
-        LocalPlayerDifferentMapX = (LocalPlayerStartX - LocalPlayerPreviousX) * 16
-        LocalPlayerDifferentMapY = (LocalPlayerStartY - LocalPlayerPreviousY) * 16
+        LocalPlayerStart.X = LocalPlayerCurrent.X
+        LocalPlayerStart.Y = LocalPlayerCurrent.Y
+        LocalPlayerDifferentMap.X = (LocalPlayerStart.X - LocalPlayerPrevious.X) * 16
+        LocalPlayerDifferentMap.Y = (LocalPlayerStart.Y - LocalPlayerPrevious.Y) * 16
         if LocalPlayerCurrentDirection == 1 then
-            LocalPlayerStartX = LocalPlayerStartX + 1
+            LocalPlayerStart.X = LocalPlayerStart.X + 1
         elseif LocalPlayerCurrentDirection == 2 then
-            LocalPlayerStartX = LocalPlayerStartX - 1
+            LocalPlayerStart.X = LocalPlayerStart.X - 1
         elseif LocalPlayerCurrentDirection == 3 then
-            LocalPlayerStartY = LocalPlayerStartY + 1
+            LocalPlayerStart.Y = LocalPlayerStart.Y + 1
         elseif LocalPlayerCurrentDirection == 4 then
-            LocalPlayerStartY = LocalPlayerStartY - 1
+            LocalPlayerStart.Y = LocalPlayerStart.Y - 1
         end
     end
 end
@@ -1577,8 +1573,8 @@ end
 local function _GetPosition()
     LocalPlayerMapIDPrev = emu:read16(33813418)
     if LocalPlayerMapIDPrev == LocalPlayerMapID then
-        LocalPlayerPreviousX = LocalPlayerCurrentX
-        LocalPlayerPreviousY = LocalPlayerCurrentY
+        LocalPlayerPrevious.X = LocalPlayerCurrent.X
+        LocalPlayerPrevious.Y = LocalPlayerCurrent.Y
         LocalPlayerMapEntranceType = emu:read8(33785351)
         if LocalPlayerMapEntranceType > 10 then
             LocalPlayerMapEntranceType = 9
@@ -1586,8 +1582,8 @@ local function _GetPosition()
         LocalPlayerMapChange = 1
     end
     LocalPlayerMapID    = emu:read16(33813416)
-    LocalPlayerCurrentX = emu:read16(33779272)
-    LocalPlayerCurrentY = emu:read16(33779274)
+    LocalPlayerCurrent.X = emu:read16(33779272)
+    LocalPlayerCurrent.Y = emu:read16(33779274)
 end
 
 --- Reads the currently displayed sprite and
@@ -1737,8 +1733,8 @@ local function _GetPartialPayload()
     Payload = Payload .. LocalPlayerMapEntranceType
 
     -- The position this player entered this map from, used to calculate offsets
-    Payload = Payload .. (LocalPlayerStartX + 2000)
-    Payload = Payload .. (LocalPlayerStartY + 2000)
+    Payload = Payload .. (LocalPlayerStart.X + 2000)
+    Payload = Payload .. (LocalPlayerStart.Y + 2000)
 
     -- More padding
     Payload = Payload .. "0"
@@ -1750,7 +1746,7 @@ local function GetStatePayload(PartialPayload)
     if PartialPayload == nil then
         PartialPayload = _GetPartialPayload()
     end
-    return "1000" .. (LocalPlayerCurrentX + 2000) .. (LocalPlayerCurrentY + 2000) .. "000" .. PartialPayload
+    return "1000" .. (LocalPlayerCurrent.X + 2000) .. (LocalPlayerCurrent.Y + 2000) .. "000" .. PartialPayload
 end
 
 --- Called when a packet is received that is specific to the gameplay
@@ -1949,7 +1945,7 @@ local function OnKeysRead()
             --SCRIPTS. LOCK AND PREVENT SPAM PRESS.
             if LockFromScript == 0 and Keypressholding == 0 and not _IsBusy() then
                 --HIDE N SEEK AT DESK IN ROOM
-                if MasterClient == "h" and LocalPlayerCurrentDirection == 3 and LocalPlayerCurrentX == -991 and LocalPlayerCurrentY == -991 and LocalPlayerMapID == 260 then
+                if MasterClient == "h" and LocalPlayerCurrentDirection == 3 and LocalPlayerCurrent.X == -991 and LocalPlayerCurrent.Y == -991 and LocalPlayerMapID == 260 then
                     --Server config through bedroom drawer
                     --For temp ram to load up script in 145227776 - 08A80000
                     --8004 is the temp var to get yes or no
@@ -1958,8 +1954,8 @@ local function OnKeysRead()
                 end
                 --Interact with players
                 for nick, player in pairs(PlayerProxies) do
-                    TalkingDirX = LocalPlayerCurrentX - player.CurrentX
-                    TalkingDirY = LocalPlayerCurrentY - player.CurrentY
+                    TalkingDirX = LocalPlayerCurrent.X - player.CurrentX
+                    TalkingDirY = LocalPlayerCurrent.Y - player.CurrentY
                     if LocalPlayerCurrentDirection == 1 and TalkingDirX == 1 and TalkingDirY == 0 then
                         --		console:log("Player Left")
 
