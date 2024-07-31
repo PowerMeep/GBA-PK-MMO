@@ -84,7 +84,7 @@ It's probably a good idea to keep games with different maps separate from one an
 
 | GameID | Version        |
 |--------|----------------|
-| BPR1   |  FireRed v1.0  |
+| BPR1   | FireRed v1.0   |
 | BPR2   | FireRed v1.1   |
 | BPG1   | LeafGreen v1.0 |
 | BPG2   | LeafGreen v1.1 |
@@ -152,23 +152,24 @@ This iteration will break backwards compatibility in favor of efficiency and sca
 - [x] Both server and client only use one identifier per client as opposed to two
 - [x] Server allows configuring max players via env
 - [x] Server log has timestamps
-- [ ] Reduce `SPOS` frequency to the minimum it can be.
-  - Fewer packets/sec means more players can be handled at once.
-  - Duplicate packets can be squelched a given number of times.
-  - The whole format might be replaceable with direction changes?
 
 
 ### Milestone 3: Restructured Client
 The script is broken into three layers - Client, Logic, Magic Numbers.
 
 When the game starts, the Client loads the Logic, and the Logic loads the Magic Numbers.
-I think setting it up this way will make it a lot easier for contributors to add game modules for the games they want to see supported by this.
+I think setting it up this way will make it a lot easier for contributors to add
+game modules for the games they want to see supported by this.
+
+I don't have a nice checklist for this. I'm just kinda going over the project repeatedly and
+refactoring stuff when I feel that I understand it well enough. 
 
 #### Client
-This layer will house all the client stuff - Nickname, IP address, connection to server, pings and pongs - anything that would be true for any networked game.
-It checks the game cartridge on start and checks all the Logics it has for one that can match it. If one is found, then it will use that Logic for the session.
+This layer will house all the client stuff - Nickname, IP address, connection to server,
+pings and pongs - anything that would be true for any networked game. It checks the game cartridge
+on start and checks all the Logics it has for one that can match it. If one is found, then it will use that Logic for the session.
 
-This could, in theory, be reused for any game.
+**In theory, this could be reused for any game.**
 
 #### Logic
 This layer will house all the logic unique to the given game, tracking of other player entities and their sprites, 
@@ -178,13 +179,14 @@ When the game is started, it loads the appropriate set of magic numbers (which m
 and uses them to interface with the ROM and memory data. This way, if multiple games share the same logic (as I suspect the Pokemon games will),
 but they use different numbers to interface with the memory, then the same Logic can just load the set of numbers it needs.
 
+**For example, Pokemon.lua should be reusable for all 5 GBA Pokemon games.**
+
 #### Magic Numbers
 The term "Magic Numbers" here refers to all the memory addresses, binary payloads, or lookup tables that allow the logic to interface with the game data.
 So far, both FireRed and LeafGreen seem to use the same numbers in most situations, but there are a few differences here and there.
 These numbers into separate modules that either expose the numbers with readable names, or even expose entire function calls.
 
-For example, it's possible that the existing Logic will support Ruby, Sapphire, and Emerald if we just give it the right numbers to work with.
-
+**Each individual Pokemon gme that does things differently will need its own Magic Numbers file, such as FireRed_LeafGreen.lua.**
 
 ### Miscellaneous / Polish
 These are all "nice-to-haves" that I didn't consider to be a priority, and I worked on them when it made sense to.
@@ -222,28 +224,18 @@ These are all "nice-to-haves" that I didn't consider to be a priority, and I wor
   - The server can use this to offset `SPOS` packets more reliably than the client's current logic.
   - This requires sending the player's current faced direction.
 - [x] Separate sprite generation from lerping
-- [ ] Skip lerping on players that are not visible at any point for the duration
-  - Might not be feasible.
-  - Doing this safely requires a check on both the current and future positions.
-  - What about another zone that allows lerping but still skips rendering?
-- [ ] Instead of sending packets on a timer, only send them when the player's state changes?
-  - I am X1, Y1, and I just started running to the LEFT.
-  - (No packets while running)
-  - I am now at X2, Y1, and I just stopped running.
-  - This may prevent them from being visible to new players while their state isn't changing. Perhaps keep a much slower timer, just in case?
+- [x] Packets only sent when the player's state changes
+  - Drastically reduces average packets/second
 - [x] Separation of players from sprite render addresses (screenspace culling)
   - Rendering seems to be the primary limiting factor on maximum players.
   - Define safe "render" zones and allow players to use them on a FIFO basis
 - [x] Precalculate the render addresses
 - [x] As many players as resources allow
   - The networking seems straightforward enough
-  - Rendering may require more address-hunting
+  - Rendering more may require more address-hunting
 - [ ] Fix Trade Bug
   - Malformed `POKE` packet?
-- [ ] Fix players in a neighboring map to the north being drawn one tile too low
-- [ ] Smooth the animation on the rendered players
-  - Partially fixed by not snapping to new position after only moving one tile.
-  - Notes in the animation method in [the client script](client/GBA-PK_Client.lua)
+- [ ] Fix weirdness at map borders
 - [ ] Implement battles
 - [x] Cache addresses on load rather than checking the game version frequently
 - [ ] The server is aware of map adjacency and offsets, properly allowing cross-map visibility.
