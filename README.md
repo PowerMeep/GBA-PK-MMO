@@ -26,6 +26,7 @@ This may be preferable to you if you:
 The client is composed of a few files.
 - Config.lua - This is where you set your name and the server you want to connect to.
 - Client.lua - This maintains connection with the server.
+- Pokemon_CartGlobals.lua - Contains all the constants and variables useful to both Pokemon logic and the cartridge-specific implementations.
 - Pokemon.lua - This does all the reading and writing from memory and all the Pokemon-specific logic.
 - FireRed_LeafGreen.lua - This stores sprite data and other magic numbers used by the Pokemon script.
 - Utils.lua - This stores some basic functions for other scripts to use.
@@ -197,7 +198,7 @@ These are all "nice-to-haves" that I didn't consider to be a priority, and I wor
 - [ ] The "flashback" on game load is skipped
 - [x] Game ID only needs to be sent by the client on join
   - As the payload to the `JOIN` message
-- [ ] Squash each X/Y coordinate pair into a single vector table (?)
+- [x] Squash each X/Y coordinate pair into a single vector table (?)
   - Can also contain functions to perform math with other vectors
 - [x] Fix client chugging **hard** when trying to connect to a server that it can't reach.
   - Is this a timeout thing? What is it?
@@ -245,7 +246,9 @@ These are all "nice-to-haves" that I didn't consider to be a priority, and I wor
 - [ ] Ability to "Spectate" battles (?)
 - [ ] Use a more readable message format, like json (?)
   - Would also be more flexible; messages could be longer or shorter
-- [ ] Replace `GPOS` ping with `PING`/`PONG` with challenge 
+- [x] Replace `GPOS` ping with `PING`/`PONG` with challenge
+- [x] Server calculates latency during the `PING/PONG` exchange
+- [x] Client reports latency to the user
 - [ ] Hide and seek (?)
   - Seems to be partially implemented already
 - [ ] Double battles (??)
