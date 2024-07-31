@@ -1238,8 +1238,6 @@ local function _AnimatePlayerMovement(player)
             player.CurrentX = player.FutureX
             player.CurrentY = player.FutureY
         end
-        console:log(tostring(player.FutureX) .. ' ' .. tostring(player.FutureY))
-        console:log(tostring(player.CurrentX) .. ' ' .. tostring(player.CurrentY))
         player.FutureX = 0
         player.FutureY = 0
     end
