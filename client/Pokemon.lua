@@ -81,13 +81,14 @@ local BikeOffset = 0
 local TargetPlayer = "00000000"
 --- All of the remote players that MIGHT be visible to us.
 local PlayerProxies = {}
+--- The last position payload created by this client.
+local LastSposPayload = ""
 
 -- LOCAL PLAYER VARS
---- Camera can be between -16 and 16 and is to get the camera movement while moving
-local Camera = {X=0, Y=0}
-
 local LocalPlayer = {
-    --- ???
+    --- Camera can be between -16 and 16 and is to get the camera movement while moving
+    Camera = {X=0, Y=0},
+    --- ? Used to calculate the camera coordinates
     MapMovePrev = {X=0, Y=0},
     --- The ID of the current map
     MapID = 0,
@@ -120,9 +121,6 @@ local LocalPlayer = {
     --- Whether the player is in a battle (0 = No, 1 = Yes)
     IsInBattle = 0
 }
-
---- The last position payload created by this client.
-local LastSposPayload = ""
 
 local Keypressholding = 0
 local LockFromScript = 0
@@ -1190,11 +1188,11 @@ local function _UpdatePlayerVisibility(player)
 
     if LocalPlayer.MapEntranceType == 0 and (LocalPlayer.MapIDPrev == player.CurrentMapID or LocalPlayer.MapID == player.PreviousMapID) and player.MapChange == 0 then
         --112 and 56 = middle of screen
-        player.Relative.X = player.Animation.X + Camera.X + ((player.Current.X - LocalPlayer.Current.X) * 16) + player.DifferentMap.X + LocalPlayer.DifferentMap.X + 112
-        player.Relative.Y = player.Animation.Y + Camera.Y + ((player.Current.Y - LocalPlayer.Current.Y) * 16) + player.DifferentMap.Y + LocalPlayer.DifferentMap.Y + 56
+        player.Relative.X = player.Animation.X + LocalPlayer.Camera.X + ((player.Current.X - LocalPlayer.Current.X) * 16) + player.DifferentMap.X + LocalPlayer.DifferentMap.X + 112
+        player.Relative.Y = player.Animation.Y + LocalPlayer.Camera.Y + ((player.Current.Y - LocalPlayer.Current.Y) * 16) + player.DifferentMap.Y + LocalPlayer.DifferentMap.Y + 56
     else
-        player.Relative.X = player.Animation.X + Camera.X + ((player.Current.X - LocalPlayer.Current.X) * 16) + player.DifferentMap.X + 112
-        player.Relative.Y = player.Animation.Y + Camera.Y + ((player.Current.Y - LocalPlayer.Current.Y) * 16) + player.DifferentMap.Y + 56
+        player.Relative.X = player.Animation.X + LocalPlayer.Camera.X + ((player.Current.X - LocalPlayer.Current.X) * 16) + player.DifferentMap.X + 112
+        player.Relative.Y = player.Animation.Y + LocalPlayer.Camera.Y + ((player.Current.Y - LocalPlayer.Current.Y) * 16) + player.DifferentMap.Y + 56
     end
 
     -- Next, we check whether the player is within our screen space
@@ -1281,29 +1279,29 @@ local function _CalculateCamera()
     PlayerMapYMoveTemp = LocalPlayer.MapMovePrev.Y % 16
 
     if LocalPlayer.CurrentDirection == 1 then
-        Camera.X = PlayerMapXMoveTemp * -1
+        LocalPlayer.Camera.X = PlayerMapXMoveTemp * -1
         --	console:log("XTEMP: " .. PlayerMapXMoveTemp)
     elseif LocalPlayer.CurrentDirection == 2 then
         if PlayerMapXMoveTemp > 0 then
-            Camera.X = 16 - PlayerMapXMoveTemp
+            LocalPlayer.Camera.X = 16 - PlayerMapXMoveTemp
         else
-            Camera.X = 0
+            LocalPlayer.Camera.X = 0
         end
         --console:log("XTEMP: " .. PlayerMapXMoveTemp)
     elseif LocalPlayer.CurrentDirection == 3 then
-        Camera.Y = PlayerMapYMoveTemp * -1
+        LocalPlayer.Camera.Y = PlayerMapYMoveTemp * -1
         --console:log("YTEMP: " .. PlayerMapYMoveTemp)
     elseif LocalPlayer.CurrentDirection == 4 then
         --console:log("YTEMP: " .. PlayerMapYMoveTemp)
         if PlayerMapYMoveTemp > 0 then
-            Camera.Y = 16 - PlayerMapYMoveTemp
+            LocalPlayer.Camera.Y = 16 - PlayerMapYMoveTemp
         else
-            Camera.Y = 0
+            LocalPlayer.Camera.Y = 0
         end
     end
 
     --Calculations for X and Y of new map
-    if LocalPlayer.MapChange == 1 and (Camera.X == 0 and Camera.Y == 0) then
+    if LocalPlayer.MapChange == 1 and (LocalPlayer.Camera.X == 0 and LocalPlayer.Camera.Y == 0) then
         LocalPlayer.MapChange = 0
         LocalPlayer.Start.X = LocalPlayer.Current.X
         LocalPlayer.Start.Y = LocalPlayer.Current.Y
