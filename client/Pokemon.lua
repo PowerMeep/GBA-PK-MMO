@@ -18,45 +18,48 @@ local VERSION_NUMBER = 1019
 --- Flip the gender of remote players. Used for debugging sprites.
 local DEBUG_GENDER_SWITCH = false
 
-local PACKET_PLAYER_UPDATE      = "SPOS"
---- Sent by the server to tell a client it should stop tracking another.
---- This happens when they disconnect or when somebody moves to a different area that the server
---- doesn't think they can be seen from.
-local PACKET_PLAYER_EXIT        = "EXIT"
---- Sent by the client to request the Pokemon of another.
---- A client receiving this will respond with a series of 6 `POKE` packets.
-local PACKET_REQUEST_POKEMON    = "RPOK"
---- Sent by the client in response to an `RPOK`.
---- Contains the player's party of Pokemon.
-local PACKET_RAW_POKEMON_DATA   = "POKE"
---- Sent by the client who is too busy to respond to another player's request.
---- This can happen in response to Trade requests and Battle requests
-local PACKET_TOO_BUSY           = "TBUS"
---- Sent by the client to request to trade with another.
-local PACKET_REQUEST_TRADE      = "RTRA"
---- Sent by the client to accept the trade.
-local PACKET_DECLINE_TRADE      = "DTRA"
---- Sent by the client to decline the trade.
-local PACKET_ACCEPT_TRADE       = "STRA"
---- Sent by the client, containing raw trade payloads.
-local PACKET_RAW_TRADE_DATA     = "TRAD"
---- Sent by the client to cancel a previously accepted trade.
-local PACKET_CANCEL_TRADE       = "CTRA"
---- Sent by the client if they refuse a trade offer.
-local PACKET_REFUSE_TRADE_OFFER = "ROFF"
---- Sent by the client, challenging another to battle.
-local PACKET_REQUEST_BATTLE     = "RBAT"
---- Sent by the client, declining the challenge.
-local PACKET_DECLINE_BATTLE     = "DBAT"
---- Sent by the client, accepting the challenge.
-local PACKET_ACCEPT_BATTLE      = "SBAT"
---- Sent by the client, containing raw battle data.
-local PACKET_RAW_BATTLE_DATA    = "BATT"
---- Sent by the client, canceling a previously accepted battle.
-local PACKET_CANCEL_BATTLE      = "CBAT"
---- Sent by clients to one another.
---- I believe this is for forwarding raw Link Cable communications.
-local PACKET_RAW_LINK_DATA      = "SLNK"
+local PacketTypes = {
+    --- Contains the current position, map, and animation state of a player
+    PLAYER_UPDATE      = "SPOS",
+    --- Sent by the server to tell a client it should stop tracking another.
+    --- This happens when they disconnect or when somebody moves to a different area that the server
+    --- doesn't think they can be seen from.
+    PLAYER_EXIT        = "EXIT",
+    --- Sent by the client to request the Pokemon of another.
+    --- A client receiving this will respond with a series of 6 `POKE` packets.
+    REQUEST_POKEMON    = "RPOK",
+    --- Sent by the client in response to an `RPOK`.
+    --- Contains the player's party of Pokemon.
+    RAW_POKEMON_DATA   = "POKE",
+    --- Sent by the client who is too busy to respond to another player's request.
+    --- This can happen in response to Trade requests and Battle requests
+    TOO_BUSY           = "TBUS",
+    --- Sent by the client to request to trade with another.
+    REQUEST_TRADE      = "RTRA",
+    --- Sent by the client to accept the trade.
+    DECLINE_TRADE      = "DTRA",
+    --- Sent by the client to decline the trade.
+    ACCEPT_TRADE       = "STRA",
+    --- Sent by the client, containing raw trade payloads.
+    RAW_TRADE_DATA     = "TRAD",
+    --- Sent by the client to cancel a previously accepted trade.
+    CANCEL_TRADE       = "CTRA",
+    --- Sent by the client if they refuse a trade offer.
+    REFUSE_TRADE_OFFER = "ROFF",
+    --- Sent by the client, challenging another to battle.
+    REQUEST_BATTLE     = "RBAT",
+    --- Sent by the client, declining the challenge.
+    DECLINE_BATTLE     = "DBAT",
+    --- Sent by the client, accepting the challenge.
+    ACCEPT_BATTLE      = "SBAT",
+    --- Sent by the client, containing raw battle data.
+    RAW_BATTLE_DATA    = "BATT",
+    --- Sent by the client, canceling a previously accepted battle.
+    CANCEL_BATTLE      = "CBAT",
+    --- Sent by clients to one another.
+    --- I believe this is for forwarding raw Link Cable communications.
+    RAW_LINK_DATA      = "SLNK"
+}
 
 -- SESSION VARIABLES
 --- The currently loaded rom.
@@ -162,7 +165,7 @@ local function _RequestRawPokemonData()
     for i = 1, 6 do
         EnemyPokemon[i] = ""
     end
-    _SendToPlayer(PACKET_REQUEST_POKEMON)
+    _SendToPlayer( PacketTypes.REQUEST_POKEMON)
 end
 
 --- Load pokemon data from memory and store them in our variables.
@@ -195,19 +198,19 @@ local function _SendRawPokemonData()
             StartNum = ((i - 1) * 25) + 1
             StartNum2 = StartNum + 24
             PokeTemp = string.sub(Pokemon[j], StartNum, StartNum2)
-            _SendToPlayer(PACKET_RAW_POKEMON_DATA, PokeTemp)
+            _SendToPlayer( PacketTypes.RAW_POKEMON_DATA, PokeTemp)
         end
     end
 end
 
 --- Helper method to send raw trade data to the other player.
 local function _SendRawTradeData()
-    _SendToPlayer(PACKET_RAW_TRADE_DATA, TradeVars[1] .. TradeVars[2] .. TradeVars[3] .. TradeVars[5])
+    _SendToPlayer( PacketTypes.RAW_TRADE_DATA, TradeVars[1] .. TradeVars[2] .. TradeVars[3] .. TradeVars[5])
 end
 
 --- Helper method to send raw battle data to the other player.
 local function _SendRawBattleData()
-    _SendToPlayer(PACKET_RAW_BATTLE_DATA, BattleVars[1] .. BattleVars[2] .. BattleVars[3] .. BattleVars[4] .. BattleVars[5] .. BattleVars[6] .. BattleVars[7] .. BattleVars[8] .. BattleVars[9] .. BattleVars[10])
+    _SendToPlayer( PacketTypes.RAW_BATTLE_DATA, BattleVars[1] .. BattleVars[2] .. BattleVars[3] .. BattleVars[4] .. BattleVars[5] .. BattleVars[6] .. BattleVars[7] .. BattleVars[8] .. BattleVars[9] .. BattleVars[10])
 end
 
 
@@ -223,7 +226,7 @@ local function _SendRawLinkData(size)
     local SizeAct = size + 1000000000
     --		SizeAct = tostring(SizeAct)
     --		SizeAct = string.format("%.0f",SizeAct)
-    _SendToPlayer(PACKET_RAW_LINK_DATA, SizeAct)
+    _SendToPlayer( PacketTypes.RAW_LINK_DATA, SizeAct)
 end
 
 local function _SendMultiplayerPackets(Offset, size)
@@ -898,7 +901,7 @@ local function _Tradescript()
         --You have canceled or have not selected a valid pokemon slot
     elseif Var8000[2] == 1 and TradeVars[1] == 1 then
         _Loadscript(16)
-        _SendToPlayer(PACKET_CANCEL_TRADE)
+        _SendToPlayer( PacketTypes.CANCEL_TRADE)
         LockFromScript = 0
         TradeVars[1] = 0
         TradeVars[2] = 0
@@ -954,7 +957,7 @@ local function _Tradescript()
     elseif TradeVars[1] == 3 then
         --If you decline
         if Var8000[2] == 1 then
-            _SendToPlayer(PACKET_REFUSE_TRADE_OFFER)
+            _SendToPlayer( PacketTypes.REFUSE_TRADE_OFFER)
             _Loadscript(16)
             LockFromScript = 7
             TradeVars[1] = 0
@@ -1483,7 +1486,7 @@ local function _DoScriptUpdates()
                 _Loadscript(20)
             end
         end
-        --				SendToPlayer(PACKET_REQUEST_BATTLE)
+        --				SendToPlayer( PacketTypes.REQUEST_BATTLE)
 
         --Wait until other player accepts trade
     elseif LockFromScript == 5 then
@@ -1501,14 +1504,14 @@ local function _DoScriptUpdates()
                 _Loadscript(21)
             end
         end
-        --				SendToPlayer(PACKET_REQUEST_TRADE)
+        --				SendToPlayer( PacketTypes.REQUEST_TRADE)
 
         --Show card. Placeholder for now
     elseif LockFromScript == 6 then
         if Var8000[2] ~= 0 then
             --		console:log("Var 8001: " .. Var8000[2])
             LockFromScript = 0
-            --	then SendToPlayer(PACKET_REQUEST_TRADE)
+            --	then SendToPlayer( PacketTypes.REQUEST_TRADE)
         end
 
         --Exit message
@@ -1534,7 +1537,7 @@ local function _DoScriptUpdates()
         if Var8000[2] == 2 then
             if OtherPlayerHasCancelled == 0 then
                 _RequestRawPokemonData()
-                _SendToPlayer(PACKET_ACCEPT_BATTLE)
+                _SendToPlayer( PacketTypes.ACCEPT_BATTLE)
                 LockFromScript = 8
                 _Loadscript(13)
             else
@@ -1544,7 +1547,7 @@ local function _DoScriptUpdates()
             end
         elseif Var8000[2] == 1 then
             LockFromScript = 0
-            _SendToPlayer(PACKET_DECLINE_BATTLE)
+            _SendToPlayer( PacketTypes.DECLINE_BATTLE)
             Keypressholding = 1
         end
 
@@ -1555,7 +1558,7 @@ local function _DoScriptUpdates()
         if Var8000[2] == 2 then
             if OtherPlayerHasCancelled == 0 then
                 _RequestRawPokemonData()
-                _SendToPlayer(PACKET_ACCEPT_TRADE)
+                _SendToPlayer( PacketTypes.ACCEPT_TRADE)
                 LockFromScript = 9
             else
                 OtherPlayerHasCancelled = 0
@@ -1564,7 +1567,7 @@ local function _DoScriptUpdates()
             end
         elseif Var8000[2] == 1 then
             LockFromScript = 0
-            _SendToPlayer(PACKET_DECLINE_TRADE)
+            _SendToPlayer( PacketTypes.DECLINE_TRADE)
             Keypressholding = 1
         end
     end
@@ -1752,55 +1755,55 @@ end
 
 --- Called when a packet is received that is specific to the gameplay
 local function OnDataReceived(sender, messageType, payload)
-    if messageType == PACKET_RAW_LINK_DATA then
+    if messageType ==  PacketTypes.RAW_LINK_DATA then
         local data = tonumber(string.sub(payload, 1, 10))
         if data ~= 0 then
             _ReceiveMultiplayerPackets(data - 1000000000)
         end
-    elseif messageType == PACKET_RAW_POKEMON_DATA then
+    elseif messageType ==  PacketTypes.RAW_POKEMON_DATA then
         local PokeTemp2 = string.sub(payload, 1, 25)
         _SetPokemonData(PokeTemp2)
-    elseif messageType == PACKET_RAW_TRADE_DATA then
+    elseif messageType ==  PacketTypes.RAW_TRADE_DATA then
         for i = 1, 3 do
             EnemyTradeVars[i] = tonumber(string.sub(payload, i, i))
         end
         EnemyTradeVars[5] = string.sub(payload, 4, 43)
 
-    elseif messageType == PACKET_RAW_BATTLE_DATA then
+    elseif messageType ==  PacketTypes.RAW_BATTLE_DATA then
         for i = 1, 10 do
             EnemyBattleVars[i] = tonumber(string.sub(payload, i, i))
         end
     else
-        if messageType == PACKET_REQUEST_POKEMON then
+        if messageType ==  PacketTypes.REQUEST_POKEMON then
             _GetPokemonTeam()
             _SendRawPokemonData()
-        elseif messageType == PACKET_REQUEST_BATTLE then
+        elseif messageType ==  PacketTypes.REQUEST_BATTLE then
             --If player requests for a battle
             if (_IsBusy() or LockFromScript ~= 0) then
-                _SendToPlayer(PACKET_TOO_BUSY)
+                _SendToPlayer( PacketTypes.TOO_BUSY)
             else
                 OtherPlayerHasCancelled = 0
                 LockFromScript = 10
                 TargetPlayer = sender
                 _Loadscript(10)
             end
-        elseif messageType == PACKET_REQUEST_TRADE then
+        elseif messageType ==  PacketTypes.REQUEST_TRADE then
             --If player requests for a trade
             if (_IsBusy() or LockFromScript ~= 0) then
-                _SendToPlayer(PACKET_TOO_BUSY)
+                _SendToPlayer( PacketTypes.TOO_BUSY)
             else
                 OtherPlayerHasCancelled = 0
                 LockFromScript = 11
                 TargetPlayer = sender
                 _Loadscript(6)
             end
-        elseif messageType == PACKET_CANCEL_BATTLE and sender == TargetPlayer then
+        elseif messageType ==  PacketTypes.CANCEL_BATTLE and sender == TargetPlayer then
             --If player cancels battle
             OtherPlayerHasCancelled = 1
-        elseif messageType == PACKET_CANCEL_TRADE and sender == TargetPlayer then
+        elseif messageType ==  PacketTypes.CANCEL_TRADE and sender == TargetPlayer then
             --If player cancels trade
             OtherPlayerHasCancelled = 2
-        elseif messageType == PACKET_TOO_BUSY and sender == TargetPlayer and LockFromScript == 4 then
+        elseif messageType ==  PacketTypes.TOO_BUSY and sender == TargetPlayer and LockFromScript == 4 then
             --If player is too busy to battle
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -1808,7 +1811,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 5
             end
-        elseif messageType == PACKET_TOO_BUSY and sender == TargetPlayer and LockFromScript == 5 then
+        elseif messageType ==  PacketTypes.TOO_BUSY and sender == TargetPlayer and LockFromScript == 5 then
             --If player is too busy to trade
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -1816,7 +1819,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 6
             end
-        elseif messageType == PACKET_ACCEPT_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
+        elseif messageType ==  PacketTypes.ACCEPT_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
             --If player accepts your battle request
             _RequestRawPokemonData()
             if Var8000[2] ~= 0 then
@@ -1825,7 +1828,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 1
             end
-        elseif messageType == PACKET_ACCEPT_TRADE and sender == TargetPlayer and LockFromScript == 5 then
+        elseif messageType ==  PacketTypes.ACCEPT_TRADE and sender == TargetPlayer and LockFromScript == 5 then
             --If player accepts your trade request
             _RequestRawPokemonData()
             if Var8000[2] ~= 0 then
@@ -1833,7 +1836,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 2
             end
-        elseif messageType == PACKET_DECLINE_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
+        elseif messageType ==  PacketTypes.DECLINE_BATTLE and sender == TargetPlayer and LockFromScript == 4 then
             --If player denies your battle request
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -1841,7 +1844,7 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 3
             end
-        elseif messageType == PACKET_DECLINE_TRADE and sender == TargetPlayer and LockFromScript == 5 then
+        elseif messageType ==  PacketTypes.DECLINE_TRADE and sender == TargetPlayer and LockFromScript == 5 then
             --If player denies your trade request
             if Var8000[2] ~= 0 then
                 LockFromScript = 7
@@ -1849,17 +1852,17 @@ local function OnDataReceived(sender, messageType, payload)
             else
                 TextSpeedWait = 4
             end
-        elseif messageType == PACKET_REFUSE_TRADE_OFFER and sender == TargetPlayer and LockFromScript == 9 then
+        elseif messageType ==  PacketTypes.REFUSE_TRADE_OFFER and sender == TargetPlayer and LockFromScript == 9 then
             --If player refuses trade offer
             OtherPlayerHasCancelled = 3
-        elseif messageType == PACKET_PLAYER_UPDATE then
+        elseif messageType == PacketTypes.PLAYER_UPDATE then
             local player = PlayerProxies[sender]
             if player == nil then
                 player = NewPlayerProxy()
                 PlayerProxies[sender] = player
             end
             _OnRemotePlayerUpdate(player, payload)
-        elseif messageType == PACKET_PLAYER_EXIT then
+        elseif messageType ==  PacketTypes.PLAYER_EXIT then
             PlayerProxies[sender] = nil
         else
             console:log("Received unknown packet type \"" .. messageType .. "\". This may indicate that the client is a little outdated.")
@@ -1911,7 +1914,7 @@ local function OnKeysRead()
                 _Loadscript(3)
                 Keypressholding = 1
                 Keypress = 1
-                --			SendToPlayer(PACKET_REQUEST_BATTLE)
+                --			SendToPlayer( PacketTypes.REQUEST_BATTLE)
 
             elseif Var8000[1] == 2 then
                 --			console:log("Trade selected")
@@ -1920,7 +1923,7 @@ local function OnKeysRead()
                 _Loadscript(4)
                 Keypressholding = 1
                 Keypress = 1
-                _SendToPlayer(PACKET_REQUEST_TRADE)
+                _SendToPlayer( PacketTypes.REQUEST_TRADE)
 
             elseif Var8000[1] == 3 then
                 --			console:log("Card selected")
@@ -1984,12 +1987,12 @@ local function OnKeysRead()
             if LockFromScript == 4 and Keypressholding == 0 and Var8000[2] ~= 0 then
                 --Cancel battle request
                 _Loadscript(15)
-                _SendToPlayer(PACKET_CANCEL_BATTLE)
+                _SendToPlayer( PacketTypes.CANCEL_BATTLE)
                 LockFromScript = 0
             elseif LockFromScript == 5 and Keypressholding == 0 and Var8000[2] ~= 0 then
                 --Cancel trade request
                 _Loadscript(16)
-                _SendToPlayer(PACKET_CANCEL_TRADE)
+                _SendToPlayer( PacketTypes.CANCEL_TRADE)
                 LockFromScript = 0
                 TradeVars[1] = 0
                 TradeVars[2] = 0
@@ -1998,7 +2001,7 @@ local function OnKeysRead()
             elseif LockFromScript == 9 and (TradeVars[1] == 2 or TradeVars[1] == 4) and Keypressholding == 0 and Var8000[2] ~= 0 then
                 --Cancel trade request
                 _Loadscript(16)
-                _SendToPlayer(PACKET_CANCEL_TRADE)
+                _SendToPlayer( PacketTypes.CANCEL_TRADE)
                 LockFromScript = 0
                 TradeVars[1] = 0
                 TradeVars[2] = 0
@@ -2061,7 +2064,7 @@ local function UpdateGameState()
     if payload ~= LastSposPayload then
         if LastSposPayload ~= "" then
             SendToServer(
-                PACKET_PLAYER_UPDATE,
+                PacketTypes.PLAYER_UPDATE,
                 GetStatePayload(payload)
             )
         end
