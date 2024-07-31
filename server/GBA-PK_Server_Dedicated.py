@@ -3,7 +3,7 @@ import os
 import re
 import socket
 from threading import Thread
-from time import sleep
+import time
 
 # Load ENVs
 logging_level = logging.getLevelName(os.environ.get('LOGGING_LEVEL', 'WARNING'))
@@ -34,10 +34,11 @@ PACKET_TYPE_DENY  = 'DENY'
 PACKET_TYPE_EXIT  = 'EXIT'
 
 # Client packet types
-PACKET_TYPE_JOIN = 'JOIN'
-PACKET_TYPE_POS  = 'SPOS'
-PACKET_TYPE_PING = 'GPOS'
-PACKET_TYPE_PONG = 'GPOS'
+PACKET_TYPE_JOIN     = 'JOIN'
+PACKET_TYPE_POS      = 'SPOS'
+PACKET_TYPE_PING     = 'PING'
+PACKET_TYPE_PONG     = 'PONG'
+PACKET_TYPE_PINGPONG = 'PNPN'
 
 # Deny reasons
 MIN_SUPPORTED_CLIENT_VERSION = 1019
@@ -121,6 +122,7 @@ class Client:
                  addr):
         self.sock: socket.socket = sock
         self.sock.settimeout(10)
+        self.latency = 0
         self.addr = addr
         self.version = MIN_SUPPORTED_CLIENT_VERSION
         self.nick = '0000'
@@ -223,22 +225,39 @@ class Client:
             raise IOError(f'{self.addr} Timed out.')
 
     def on_raw_packet(self, packet):
+        packet = str(packet)
         if len(packet) < 64:
             self.logger.warning(packet)
             return
 
         recipient         = packet[8:16]
         packet_type       = packet[16:20]
-        packet_val        = packet[20:24]
 
         the_letter_u      = packet[63]
+        if not the_letter_u == 'U':
+            self.logger.error('Malformed packet did not end with a U')
+            return
 
         self.logger.debug(packet)
 
         if packet_type == PACKET_TYPE_POS:
             self.update_positions(packet)
         elif packet_type == PACKET_TYPE_PONG:
-            self.logger.debug('Received PONG')
+            index_of_padding = packet.find('F', 24)
+            if index_of_padding >= 0:
+                self.logger.debug('Received PONG')
+                try:
+                    # Subtract timestamp in message from current millis
+                    # Bound to 4-digit number between 0 and 9999
+                    self.latency = f'{max(
+                        0, min(
+                            round(time.time() * 1000) - int(packet[20:index_of_padding]),
+                            9999
+                        )
+                    ):04}'
+                    self.send_packet(PACKET_TYPE_PINGPONG, self.latency)
+                except ValueError:
+                    self.logger.debug('PONG did not have a numeric timestamp')
             self.unresponded_pings = 0
         elif recipient in clients_by_nick:
             clients_by_nick[recipient].send_raw(packet)
@@ -308,14 +327,16 @@ class Client:
 
     def send_packet(self,
                     packet_type,
-                    payload="0000"):
-        self.send_raw(
+                    payload=""):
+        packet = (
             str(server_nick) +
             str(self.nick) +
             str(packet_type) +
-            str(payload) +
-            "11111111111111111111111111111111111111FU"
+            str(payload)
         )
+        # Pad to 64 characters with F's
+        packet = packet + ('F' * (63 - len(packet))) + 'U'
+        self.send_raw(packet)
 
     def send_exit_packet_from(self, client):
         self.send_raw(f'{client.nick}{self.nick}{PACKET_TYPE_EXIT}{"0" * 42}FU')
@@ -345,7 +366,7 @@ class Client:
             # This should function like a ping and stop the client from timing out so aggressively
             self.send_packet(
                 PACKET_TYPE_PING,
-                "1111"
+                str(round(time.time() * 1000))
             )
 
     def disconnect(self):
@@ -371,7 +392,7 @@ def on_new_connection(s, addr):
 
 def ping_loop():
     while running:
-        sleep(ping_time)
+        time.sleep(ping_time)
         for client in list(clients_by_nick.values()):
             client.ping()
 

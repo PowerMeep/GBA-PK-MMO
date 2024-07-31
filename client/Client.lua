@@ -22,9 +22,11 @@ local PacketTypes = {
     --- Everything that is needed by another client to render this one.
     --- Sent by the server to check if a client is still there.
     --- If it is, the client should respond with a `PONG`
-    PING         = "GPOS",
+    PING         = "PING",
     --- Sent by the client in response to a `PING`.
-    PONG         = "GPOS"
+    PONG         = "PONG",
+    --- Sent by the server with the round trip time of the ping-pong.
+    PINGPONG     = "PNPN"
 }
 
 local DenyReasons = {
@@ -63,6 +65,8 @@ local Nickname = ""
 
 --- The socket used for communications with the server.
 local SocketMain = ""
+--- The latency between this client and the server.
+local Latency = 0
 
 --- A flag for the current connection status
 --- - a = not connected
@@ -101,7 +105,7 @@ local function UpdateConsole()
     SetLine(2, "Game: " .. LoadedGame.GameName)
 
     if MasterClient == "c" then
-        SetLine(3, "Server Name: " .. ServerName)
+        SetLine(3, "Server Name: " .. ServerName .. " (" .. Latency .. " ms)")
         SetLine(4, LoadedGame.GetStateForConsole())
     else
         SetLine(3, "Not Connected.")
@@ -218,7 +222,7 @@ local function OnDataReceived()
         ServerName = sender
         ErrorMessage = ""
         MasterClient = "c"
-    elseif messageType ==  PacketTypes.SERVER_DENY then
+    elseif messageType == PacketTypes.SERVER_DENY then
         local reason = string.sub(payload, 1, 4)
         if tonumber(reason) ~= nil then
             ErrorMessage = "Server requires client script version " .. reason .. " or higher."
@@ -236,8 +240,10 @@ local function OnDataReceived()
         LoadedGame = nil
         SocketMain:close()
         console:log(ErrorMessage)
-    elseif messageType ==  PacketTypes.PING then
-        SendToServer( PacketTypes.PONG, payload)
+    elseif messageType == PacketTypes.PING then
+        SendToServer(PacketTypes.PONG, payload)
+    elseif messageType == PacketTypes.PINGPONG then
+        Latency = tonumber(string.sub(payload, 1,4))
     else
         LoadedGame.OnDataReceived(sender, messageType, payload)
     end
@@ -250,7 +256,7 @@ local function ConnectToServer()
     local success, _ = SocketMain:connect(Config.Host, Config.Port)
     if success then
         console:log("Joining game...")
-        SendData( PacketTypes.JOIN_SERVER, LoadedGame.Version .. LoadedGame.GameID, LoadedGame.GetStatePayload())
+        SendData(PacketTypes.JOIN_SERVER, LoadedGame.Version .. LoadedGame.GameID, LoadedGame.GetStatePayload())
         SocketMain:add("received", OnDataReceived)
     else
         console:log("Could not connect to server.")
